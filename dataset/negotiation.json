@@ -1,0 +1,128 @@
+[
+  {
+    "id": 1,
+    "category": "negotiation",
+    "content": "FOB -3% 성공",
+    "metadata": {}
+  },
+  {
+    "id": 2,
+    "category": "negotiation",
+    "content": "volume 조건 할인",
+    "metadata": {}
+  },
+  {
+    "id": 3,
+    "category": "negotiation",
+    "content": "장기계약 단가 고정",
+    "metadata": {}
+  },
+  {
+    "id": 4,
+    "category": "negotiation",
+    "content": "환율 반영 재협상",
+    "metadata": {}
+  },
+  {
+    "id": 5,
+    "category": "negotiation",
+    "content": "품질 downgrade 할인",
+    "metadata": {}
+  },
+  {
+    "id": 6,
+    "category": "negotiation",
+    "content": "운임 상승 price adjust",
+    "metadata": {}
+  },
+  {
+    "id": 7,
+    "category": "negotiation",
+    "content": "경쟁사 견적 대응",
+    "metadata": {}
+  },
+  {
+    "id": 8,
+    "category": "negotiation",
+    "content": "샘플 후 가격 확정",
+    "metadata": {}
+  },
+  {
+    "id": 9,
+    "category": "negotiation",
+    "content": "첫거래 할인",
+    "metadata": {}
+  },
+  {
+    "id": 10,
+    "category": "negotiation",
+    "content": "bulk 주문 할인",
+    "metadata": {}
+  },
+  {
+    "id": 11,
+    "category": "negotiation",
+    "content": "shipment delay discount",
+    "metadata": {}
+  },
+  {
+    "id": 12,
+    "category": "negotiation",
+    "content": "claim offset",
+    "metadata": {}
+  },
+  {
+    "id": 13,
+    "category": "negotiation",
+    "content": "advance payment 할인",
+    "metadata": {}
+  },
+  {
+    "id": 14,
+    "category": "negotiation",
+    "content": "LC 조건 추가 비용",
+    "metadata": {}
+  },
+  {
+    "id": 15,
+    "category": "negotiation",
+    "content": "premium bean 추가금",
+    "metadata": {}
+  },
+  {
+    "id": 16,
+    "category": "negotiation",
+    "content": "spot price 협상",
+    "metadata": {}
+  },
+  {
+    "id": 17,
+    "category": "negotiation",
+    "content": "계약 연장 할인",
+    "metadata": {}
+  },
+  {
+    "id": 18,
+    "category": "negotiation",
+    "content": "off-season discount",
+    "metadata": {}
+  },
+  {
+    "id": 19,
+    "category": "negotiation",
+    "content": "freight split 협상",
+    "metadata": {}
+  },
+  {
+    "id": 20,
+    "category": "negotiation",
+    "content": "multi-origin bundle 할인",
+    "metadata": {}
+  },
+  {
+    "id": 21,
+    "category": "negotiation",
+    "content": "반드시 추가 5개 카테고리",
+    "metadata": {}
+  }
+]

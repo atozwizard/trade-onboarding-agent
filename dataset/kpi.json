@@ -1,0 +1,122 @@
+[
+  {
+    "id": 1,
+    "category": "kpi",
+    "content": "평균 선적지연 2.3일",
+    "metadata": {}
+  },
+  {
+    "id": 2,
+    "category": "kpi",
+    "content": "클레임율 3%",
+    "metadata": {}
+  },
+  {
+    "id": 3,
+    "category": "kpi",
+    "content": "재구매율 62%",
+    "metadata": {}
+  },
+  {
+    "id": 4,
+    "category": "kpi",
+    "content": "신규거래 전환율 18%",
+    "metadata": {}
+  },
+  {
+    "id": 5,
+    "category": "kpi",
+    "content": "평균 협상마진 7%",
+    "metadata": {}
+  },
+  {
+    "id": 6,
+    "category": "kpi",
+    "content": "LC 비중 45%",
+    "metadata": {}
+  },
+  {
+    "id": 7,
+    "category": "kpi",
+    "content": "T/T 비중 55%",
+    "metadata": {}
+  },
+  {
+    "id": 8,
+    "category": "kpi",
+    "content": "주요시장 EU 40%",
+    "metadata": {}
+  },
+  {
+    "id": 9,
+    "category": "kpi",
+    "content": "월 shipment 28건",
+    "metadata": {}
+  },
+  {
+    "id": 10,
+    "category": "kpi",
+    "content": "평균 deal size 45k$",
+    "metadata": {}
+  },
+  {
+    "id": 11,
+    "category": "kpi",
+    "content": "top buyer 비중 22%",
+    "metadata": {}
+  },
+  {
+    "id": 12,
+    "category": "kpi",
+    "content": "환율 영향 ±4%",
+    "metadata": {}
+  },
+  {
+    "id": 13,
+    "category": "kpi",
+    "content": "반품율 1.2%",
+    "metadata": {}
+  },
+  {
+    "id": 14,
+    "category": "kpi",
+    "content": "분쟁 해결 평균 5일",
+    "metadata": {}
+  },
+  {
+    "id": 15,
+    "category": "kpi",
+    "content": "견적→계약 전환 31%",
+    "metadata": {}
+  },
+  {
+    "id": 16,
+    "category": "kpi",
+    "content": "샘플→본계약 48%",
+    "metadata": {}
+  },
+  {
+    "id": 17,
+    "category": "kpi",
+    "content": "신규 buyer 6/month",
+    "metadata": {}
+  },
+  {
+    "id": 18,
+    "category": "kpi",
+    "content": "선적 정확도 96%",
+    "metadata": {}
+  },
+  {
+    "id": 19,
+    "category": "kpi",
+    "content": "문서 오류율 4%",
+    "metadata": {}
+  },
+  {
+    "id": 20,
+    "category": "kpi",
+    "content": "교육 이수율 70%",
+    "metadata": {}
+  }
+]

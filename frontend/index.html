@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradeOnboarding Agent - 무역 신입 AI 시뮬레이터</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 900px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .agent-selector {
+            display: flex;
+            background: #f8f9fa;
+            padding: 10px;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .agent-btn {
+            padding: 10px 20px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        .agent-btn:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .agent-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .chat-container {
+            height: 500px;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 15px;
+            border-radius: 15px;
+            line-height: 1.5;
+        }
+
+        .message.user .message-content {
+            background: #667eea;
+            color: white;
+            border-bottom-right-radius: 5px;
+        }
+
+        .message.agent .message-content {
+            background: white;
+            color: #333;
+            border-bottom-left-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .agent-badge {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 10px;
+            font-size: 11px;
+            margin-bottom: 5px;
+        }
+
+        .input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 10px;
+        }
+
+        #userInput {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        #userInput:focus {
+            border-color: #667eea;
+        }
+
+        #sendBtn {
+            padding: 15px 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        #sendBtn:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+        }
+
+        #sendBtn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 10px;
+            color: #667eea;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .example-queries {
+            padding: 15px 20px;
+            background: #f0f4ff;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .example-queries h3 {
+            font-size: 14px;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .example-btn {
+            display: inline-block;
+            margin: 5px;
+            padding: 8px 15px;
+            background: white;
+            border: 1px solid #667eea;
+            color: #667eea;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+
+        .example-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚢 TradeOnboarding Agent</h1>
+            <p>무역회사 신입사원을 위한 AI 온보딩 시뮬레이터</p>
+        </div>
+
+        <div class="agent-selector">
+            <button class="agent-btn active" data-agent="auto">🤖 자동 선택</button>
+            <button class="agent-btn" data-agent="quiz">📝 퀴즈</button>
+            <button class="agent-btn" data-agent="email">✉️ 이메일</button>
+            <button class="agent-btn" data-agent="mistake">⚠️ 실수 예측</button>
+            <button class="agent-btn" data-agent="ceo">👔 대표 시뮬레이션</button>
+        </div>
+
+        <div class="chat-container" id="chatContainer">
+            <div class="message agent">
+                <div class="message-content">
+                    <div class="agent-badge">시스템</div>
+                    <div>안녕하세요! 무역회사 신입 온보딩 AI 시뮬레이터입니다. 😊<br><br>
+                    저는 다음과 같은 도움을 드릴 수 있습니다:<br>
+                    • 📝 무역 용어 퀴즈<br>
+                    • ✉️ 이메일 작성 코칭<br>
+                    • ⚠️ 실수 예측 및 예방<br>
+                    • 👔 대표 보고 연습<br><br>
+                    무엇을 도와드릴까요?</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="loading" id="loading">
+            <div>⏳ 응답 생성 중...</div>
+        </div>
+
+        <div class="example-queries">
+            <h3>💡 예시 질문:</h3>
+            <span class="example-btn" onclick="sendExample('BL에 대한 퀴즈를 내줘')">BL 퀴즈</span>
+            <span class="example-btn" onclick="sendExample('선적 지연 메일 작성 도와줘')">선적 지연 메일</span>
+            <span class="example-btn" onclick="sendExample('BL 작성할 때 실수할 수 있는 게 뭐야?')">BL 실수 예측</span>
+            <span class="example-btn" onclick="sendExample('대표님께 브라질 거래 보고 연습하고 싶어')">대표 보고 연습</span>
+        </div>
+
+        <div class="input-container">
+            <div class="input-wrapper">
+                <input type="text" id="userInput" placeholder="메시지를 입력하세요..." onkeypress="handleKeyPress(event)">
+                <button id="sendBtn" onclick="sendMessage()">전송</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentAgent = 'auto';
+
+        // Agent selector
+        document.querySelectorAll('.agent-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.agent-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                currentAgent = this.dataset.agent;
+            });
+        });
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function sendExample(text) {
+            document.getElementById('userInput').value = text;
+            sendMessage();
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('userInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+
+            // Add user message to chat
+            addMessage(message, 'user');
+            input.value = '';
+
+            // Show loading
+            document.getElementById('loading').classList.add('active');
+            document.getElementById('sendBtn').disabled = true;
+
+            try {
+                let endpoint = '/api/chat';
+                let body = { message: message };
+
+                // Use specific endpoint if agent is selected
+                if (currentAgent !== 'auto') {
+                    switch(currentAgent) {
+                        case 'quiz':
+                            endpoint = '/api/quiz/generate';
+                            body = { topic: message };
+                            break;
+                        case 'email':
+                            endpoint = '/api/email/coach';
+                            body = { email_draft: message };
+                            break;
+                        case 'mistake':
+                            endpoint = '/api/mistake/predict';
+                            break;
+                        case 'ceo':
+                            endpoint = '/api/ceo/simulate';
+                            break;
+                    }
+                }
+
+                const response = await fetch(API_URL + endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(body)
+                });
+
+                const data = await response.json();
+                
+                // Extract response based on endpoint
+                let agentResponse = '';
+                let agentType = currentAgent;
+
+                if (endpoint === '/api/chat') {
+                    agentResponse = data.response;
+                    agentType = data.agent_type;
+                } else if (endpoint === '/api/quiz/generate') {
+                    agentResponse = data.quiz;
+                    agentType = 'quiz';
+                } else if (endpoint === '/api/email/coach') {
+                    agentResponse = data.feedback;
+                    agentType = 'email';
+                } else if (endpoint === '/api/mistake/predict') {
+                    agentResponse = data.predictions;
+                    agentType = 'mistake';
+                } else if (endpoint === '/api/ceo/simulate') {
+                    agentResponse = data.ceo_response;
+                    agentType = 'ceo';
+                }
+
+                addMessage(agentResponse, 'agent', agentType);
+
+            } catch (error) {
+                console.error('Error:', error);
+                addMessage('❌ 오류가 발생했습니다. 백엔드 서버가 실행 중인지 확인해주세요.\n\n서버 시작: cd backend && uvicorn main:app --reload', 'agent', 'error');
+            } finally {
+                document.getElementById('loading').classList.remove('active');
+                document.getElementById('sendBtn').disabled = false;
+            }
+        }
+
+        function addMessage(text, sender, agentType = '') {
+            const chatContainer = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+
+            const agentBadges = {
+                'quiz': '📝 퀴즈',
+                'email': '✉️ 이메일',
+                'mistake': '⚠️ 실수 예측',
+                'ceo': '👔 대표',
+                'general': '💬 일반',
+                'error': '❌ 오류'
+            };
+
+            const badge = agentType ? `<div class="agent-badge">${agentBadges[agentType] || agentType}</div>` : '';
+
+            messageDiv.innerHTML = `
+                <div class="message-content">
+                    ${badge}
+                    <div>${text.replace(/\n/g, '<br>')}</div>
+                </div>
+            `;
+
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        // Check backend status on load
+        window.addEventListener('load', async () => {
+            try {
+                const response = await fetch(API_URL + '/api/health');
+                const data = await response.json();
+                console.log('Backend status:', data);
+            } catch (error) {
+                console.error('Backend not available:', error);
+                addMessage('⚠️ 백엔드 서버에 연결할 수 없습니다.\n\n서버를 시작하려면:\ncd backend\nuvicorn main:app --reload', 'agent', 'error');
+            }
+        });
+    </script>
+</body>
+</html>

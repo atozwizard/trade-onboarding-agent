@@ -1,0 +1,122 @@
+[
+  {
+    "id": 1,
+    "category": "quiz",
+    "content": "FOB에서 운임 누가 부담?",
+    "metadata": {}
+  },
+  {
+    "id": 2,
+    "category": "quiz",
+    "content": "BL 없으면 통관 가능?",
+    "metadata": {}
+  },
+  {
+    "id": 3,
+    "category": "quiz",
+    "content": "moisture 기준 몇 %?",
+    "metadata": {}
+  },
+  {
+    "id": 4,
+    "category": "quiz",
+    "content": "LC 거래 위험은?",
+    "metadata": {}
+  },
+  {
+    "id": 5,
+    "category": "quiz",
+    "content": "demurrage 언제 발생?",
+    "metadata": {}
+  },
+  {
+    "id": 6,
+    "category": "quiz",
+    "content": "CIF 포함 항목은?",
+    "metadata": {}
+  },
+  {
+    "id": 7,
+    "category": "quiz",
+    "content": "notify party 역할?",
+    "metadata": {}
+  },
+  {
+    "id": 8,
+    "category": "quiz",
+    "content": "packing list 왜 필요?",
+    "metadata": {}
+  },
+  {
+    "id": 9,
+    "category": "quiz",
+    "content": "선적지연시 우선 연락 대상?",
+    "metadata": {}
+  },
+  {
+    "id": 10,
+    "category": "quiz",
+    "content": "claim 접수 순서?",
+    "metadata": {}
+  },
+  {
+    "id": 11,
+    "category": "quiz",
+    "content": "invoice 수정 가능 시점?",
+    "metadata": {}
+  },
+  {
+    "id": 12,
+    "category": "quiz",
+    "content": "partial shipment 의미?",
+    "metadata": {}
+  },
+  {
+    "id": 13,
+    "category": "quiz",
+    "content": "freight collect 의미?",
+    "metadata": {}
+  },
+  {
+    "id": 14,
+    "category": "quiz",
+    "content": "SGS inspection 목적?",
+    "metadata": {}
+  },
+  {
+    "id": 15,
+    "category": "quiz",
+    "content": "origin cert 필요 상황?",
+    "metadata": {}
+  },
+  {
+    "id": 16,
+    "category": "quiz",
+    "content": "container seal 왜 중요?",
+    "metadata": {}
+  },
+  {
+    "id": 17,
+    "category": "quiz",
+    "content": "환율 변동 대응?",
+    "metadata": {}
+  },
+  {
+    "id": 18,
+    "category": "quiz",
+    "content": "장기거래 핵심 요소?",
+    "metadata": {}
+  },
+  {
+    "id": 19,
+    "category": "quiz",
+    "content": "대표 보고 타이밍?",
+    "metadata": {}
+  },
+  {
+    "id": 20,
+    "category": "quiz",
+    "content": "이메일 vs 전화 언제?",
+    "metadata": {}
+  }
+]

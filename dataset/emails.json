@@ -1,0 +1,322 @@
+[
+  {
+    "id": 1,
+    "category": "emails",
+    "content": "BL수정요청 | 포워더 | \"Please revise consignee...\"",
+    "metadata": {
+      "situation": "BL수정요청",
+      "recipient": "포워더",
+      "example": "\"Please revise consignee...\""
+    }
+  },
+  {
+    "id": 2,
+    "category": "emails",
+    "content": "선적확인 | 포워더 | \"Kindly confirm ETD\"",
+    "metadata": {
+      "situation": "선적확인",
+      "recipient": "포워더",
+      "example": "\"Kindly confirm ETD\""
+    }
+  },
+  {
+    "id": 3,
+    "category": "emails",
+    "content": "ETA공지 | 거래처 | \"Vessel arriving...\"",
+    "metadata": {
+      "situation": "ETA공지",
+      "recipient": "거래처",
+      "example": "\"Vessel arriving...\""
+    }
+  },
+  {
+    "id": 4,
+    "category": "emails",
+    "content": "서류전달 | 관세사 | \"Attached docs\"",
+    "metadata": {
+      "situation": "서류전달",
+      "recipient": "관세사",
+      "example": "\"Attached docs\""
+    }
+  },
+  {
+    "id": 5,
+    "category": "emails",
+    "content": "일정지연 | 거래처 | \"Shipment delayed\"",
+    "metadata": {
+      "situation": "일정지연",
+      "recipient": "거래처",
+      "example": "\"Shipment delayed\""
+    }
+  },
+  {
+    "id": 6,
+    "category": "emails",
+    "content": "가격확인 | 공급처 | \"Please confirm price\"",
+    "metadata": {
+      "situation": "가격확인",
+      "recipient": "공급처",
+      "example": "\"Please confirm price\""
+    }
+  },
+  {
+    "id": 7,
+    "category": "emails",
+    "content": "샘플요청 | 공급처 | \"Sample request\"",
+    "metadata": {
+      "situation": "샘플요청",
+      "recipient": "공급처",
+      "example": "\"Sample request\""
+    }
+  },
+  {
+    "id": 8,
+    "category": "emails",
+    "content": "클레임접수 | 공급처 | \"Quality issue\"",
+    "metadata": {
+      "situation": "클레임접수",
+      "recipient": "공급처",
+      "example": "\"Quality issue\""
+    }
+  },
+  {
+    "id": 9,
+    "category": "emails",
+    "content": "인보이스요청 | 공급처 | \"Send invoice\"",
+    "metadata": {
+      "situation": "인보이스요청",
+      "recipient": "공급처",
+      "example": "\"Send invoice\""
+    }
+  },
+  {
+    "id": 10,
+    "category": "emails",
+    "content": "결제확인 | 거래처 | \"Payment received\"",
+    "metadata": {
+      "situation": "결제확인",
+      "recipient": "거래처",
+      "example": "\"Payment received\""
+    }
+  },
+  {
+    "id": 11,
+    "category": "emails",
+    "content": "포장확인 | 공급처 | \"Packing detail?\"",
+    "metadata": {
+      "situation": "포장확인",
+      "recipient": "공급처",
+      "example": "\"Packing detail?\""
+    }
+  },
+  {
+    "id": 12,
+    "category": "emails",
+    "content": "서류누락 | 포워더 | \"Missing doc\"",
+    "metadata": {
+      "situation": "서류누락",
+      "recipient": "포워더",
+      "example": "\"Missing doc\""
+    }
+  },
+  {
+    "id": 13,
+    "category": "emails",
+    "content": "긴급요청 | 포워더 | \"Urgent handling\"",
+    "metadata": {
+      "situation": "긴급요청",
+      "recipient": "포워더",
+      "example": "\"Urgent handling\""
+    }
+  },
+  {
+    "id": 14,
+    "category": "emails",
+    "content": "통관문의 | 관세사 | \"Customs status?\"",
+    "metadata": {
+      "situation": "통관문의",
+      "recipient": "관세사",
+      "example": "\"Customs status?\""
+    }
+  },
+  {
+    "id": 15,
+    "category": "emails",
+    "content": "일정변경 | 거래처 | \"Schedule changed\"",
+    "metadata": {
+      "situation": "일정변경",
+      "recipient": "거래처",
+      "example": "\"Schedule changed\""
+    }
+  },
+  {
+    "id": 16,
+    "category": "emails",
+    "content": "계약확정 | 거래처 | \"Order confirmed\"",
+    "metadata": {
+      "situation": "계약확정",
+      "recipient": "거래처",
+      "example": "\"Order confirmed\""
+    }
+  },
+  {
+    "id": 17,
+    "category": "emails",
+    "content": "가격협상 | 공급처 | \"Can adjust?\"",
+    "metadata": {
+      "situation": "가격협상",
+      "recipient": "공급처",
+      "example": "\"Can adjust?\""
+    }
+  },
+  {
+    "id": 18,
+    "category": "emails",
+    "content": "재고문의 | 창고 | \"Stock level?\"",
+    "metadata": {
+      "situation": "재고문의",
+      "recipient": "창고",
+      "example": "\"Stock level?\""
+    }
+  },
+  {
+    "id": 19,
+    "category": "emails",
+    "content": "입고확인 | 창고 | \"Arrived?\"",
+    "metadata": {
+      "situation": "입고확인",
+      "recipient": "창고",
+      "example": "\"Arrived?\""
+    }
+  },
+  {
+    "id": 20,
+    "category": "emails",
+    "content": "완료보고 | 대표 | \"Shipment completed\"",
+    "metadata": {
+      "situation": "완료보고",
+      "recipient": "대표",
+      "example": "\"Shipment completed\""
+    }
+  },
+  {
+    "id": 21,
+    "category": "emails",
+    "content": "BL 발행 전 consignee spelling 확인 요청",
+    "metadata": {}
+  },
+  {
+    "id": 22,
+    "category": "emails",
+    "content": "선적 지연으로 ETA 3일 변경 안내",
+    "metadata": {}
+  },
+  {
+    "id": 23,
+    "category": "emails",
+    "content": "커피 생두 moisture 11% 확인 요청",
+    "metadata": {}
+  },
+  {
+    "id": 24,
+    "category": "emails",
+    "content": "FOB → CIF 조건 변경 협의",
+    "metadata": {}
+  },
+  {
+    "id": 25,
+    "category": "emails",
+    "content": "선사 booking space 부족 통보",
+    "metadata": {}
+  },
+  {
+    "id": 26,
+    "category": "emails",
+    "content": "샘플 shipment DHL tracking 전달",
+    "metadata": {}
+  },
+  {
+    "id": 27,
+    "category": "emails",
+    "content": "invoice 금액 수정 요청",
+    "metadata": {}
+  },
+  {
+    "id": 28,
+    "category": "emails",
+    "content": "packing list net/gross weight 재확인",
+    "metadata": {}
+  },
+  {
+    "id": 29,
+    "category": "emails",
+    "content": "buyer LC opening 지연 안내",
+    "metadata": {}
+  },
+  {
+    "id": 30,
+    "category": "emails",
+    "content": "demurrage 발생 예정 경고",
+    "metadata": {}
+  },
+  {
+    "id": 31,
+    "category": "emails",
+    "content": "origin certificate 긴급 발행 요청",
+    "metadata": {}
+  },
+  {
+    "id": 32,
+    "category": "emails",
+    "content": "선적 완료 notify 메일",
+    "metadata": {}
+  },
+  {
+    "id": 33,
+    "category": "emails",
+    "content": "클레임: bag tearing 발생",
+    "metadata": {}
+  },
+  {
+    "id": 34,
+    "category": "emails",
+    "content": "환율 변동으로 가격 재협상 요청",
+    "metadata": {}
+  },
+  {
+    "id": 35,
+    "category": "emails",
+    "content": "partial shipment 가능 여부 문의",
+    "metadata": {}
+  },
+  {
+    "id": 36,
+    "category": "emails",
+    "content": "fumigation certificate 필요 여부",
+    "metadata": {}
+  },
+  {
+    "id": 37,
+    "category": "emails",
+    "content": "SGS inspection 일정 조율",
+    "metadata": {}
+  },
+  {
+    "id": 38,
+    "category": "emails",
+    "content": "BL surrender 여부 확인",
+    "metadata": {}
+  },
+  {
+    "id": 39,
+    "category": "emails",
+    "content": "보험 조건 ICC(A) 요청",
+    "metadata": {}
+  },
+  {
+    "id": 40,
+    "category": "emails",
+    "content": "port congestion notice 공유",
+    "metadata": {}
+  }
+]

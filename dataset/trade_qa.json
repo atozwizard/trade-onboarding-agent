@@ -1,0 +1,122 @@
+[
+  {
+    "id": 1,
+    "category": "trade_qa",
+    "content": "FOB 뜻",
+    "metadata": {}
+  },
+  {
+    "id": 2,
+    "category": "trade_qa",
+    "content": "CIF 뜻",
+    "metadata": {}
+  },
+  {
+    "id": 3,
+    "category": "trade_qa",
+    "content": "BL 역할",
+    "metadata": {}
+  },
+  {
+    "id": 4,
+    "category": "trade_qa",
+    "content": "demurrage 정의",
+    "metadata": {}
+  },
+  {
+    "id": 5,
+    "category": "trade_qa",
+    "content": "detention 차이",
+    "metadata": {}
+  },
+  {
+    "id": 6,
+    "category": "trade_qa",
+    "content": "LC 구조",
+    "metadata": {}
+  },
+  {
+    "id": 7,
+    "category": "trade_qa",
+    "content": "T/T payment",
+    "metadata": {}
+  },
+  {
+    "id": 8,
+    "category": "trade_qa",
+    "content": "consignee 의미",
+    "metadata": {}
+  },
+  {
+    "id": 9,
+    "category": "trade_qa",
+    "content": "notify party",
+    "metadata": {}
+  },
+  {
+    "id": 10,
+    "category": "trade_qa",
+    "content": "HS code",
+    "metadata": {}
+  },
+  {
+    "id": 11,
+    "category": "trade_qa",
+    "content": "packing list",
+    "metadata": {}
+  },
+  {
+    "id": 12,
+    "category": "trade_qa",
+    "content": "proforma invoice",
+    "metadata": {}
+  },
+  {
+    "id": 13,
+    "category": "trade_qa",
+    "content": "commercial invoice",
+    "metadata": {}
+  },
+  {
+    "id": 14,
+    "category": "trade_qa",
+    "content": "ETA/ETD",
+    "metadata": {}
+  },
+  {
+    "id": 15,
+    "category": "trade_qa",
+    "content": "transshipment",
+    "metadata": {}
+  },
+  {
+    "id": 16,
+    "category": "trade_qa",
+    "content": "free time",
+    "metadata": {}
+  },
+  {
+    "id": 17,
+    "category": "trade_qa",
+    "content": "surrender BL",
+    "metadata": {}
+  },
+  {
+    "id": 18,
+    "category": "trade_qa",
+    "content": "switch BL",
+    "metadata": {}
+  },
+  {
+    "id": 19,
+    "category": "trade_qa",
+    "content": "inspection",
+    "metadata": {}
+  },
+  {
+    "id": 20,
+    "category": "trade_qa",
+    "content": "origin cert",
+    "metadata": {}
+  }
+]

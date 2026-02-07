@@ -1,0 +1,222 @@
+[
+  {
+    "id": 1,
+    "category": "internal_process",
+    "content": "거래계약 | 영업 | 견적서 | 계약서",
+    "metadata": {
+      "stage": "거래계약",
+      "person": "영업",
+      "input": "견적서",
+      "output": "계약서"
+    }
+  },
+  {
+    "id": 2,
+    "category": "internal_process",
+    "content": "발주확정 | 영업 | 계약서 | PO",
+    "metadata": {
+      "stage": "발주확정",
+      "person": "영업",
+      "input": "계약서",
+      "output": "PO"
+    }
+  },
+  {
+    "id": 3,
+    "category": "internal_process",
+    "content": "선적요청 | 영업 | PO | 선적요청서",
+    "metadata": {
+      "stage": "선적요청",
+      "person": "영업",
+      "input": "PO",
+      "output": "선적요청서"
+    }
+  },
+  {
+    "id": 4,
+    "category": "internal_process",
+    "content": "포워더연락 | 물류 | 선적요청 | 부킹확정",
+    "metadata": {
+      "stage": "포워더연락",
+      "person": "물류",
+      "input": "선적요청",
+      "output": "부킹확정"
+    }
+  },
+  {
+    "id": 5,
+    "category": "internal_process",
+    "content": "부킹확정 | 포워더 | 스케줄 | 부킹번호",
+    "metadata": {
+      "stage": "부킹확정",
+      "person": "포워더",
+      "input": "스케줄",
+      "output": "부킹번호"
+    }
+  },
+  {
+    "id": 6,
+    "category": "internal_process",
+    "content": "인보이스작성 | 영업 | 계약 | invoice",
+    "metadata": {
+      "stage": "인보이스작성",
+      "person": "영업",
+      "input": "계약",
+      "output": "invoice"
+    }
+  },
+  {
+    "id": 7,
+    "category": "internal_process",
+    "content": "패킹리스트 | 물류 | 수량 | packing list",
+    "metadata": {
+      "stage": "패킹리스트",
+      "person": "물류",
+      "input": "수량",
+      "output": "packing list"
+    }
+  },
+  {
+    "id": 8,
+    "category": "internal_process",
+    "content": "BL draft확인 | 영업 | draft | 수정요청",
+    "metadata": {
+      "stage": "BL draft확인",
+      "person": "영업",
+      "input": "draft",
+      "output": "수정요청"
+    }
+  },
+  {
+    "id": 9,
+    "category": "internal_process",
+    "content": "BL확정 | 포워더 | 수정본 | final BL",
+    "metadata": {
+      "stage": "BL확정",
+      "person": "포워더",
+      "input": "수정본",
+      "output": "final BL"
+    }
+  },
+  {
+    "id": 10,
+    "category": "internal_process",
+    "content": "선적완료 | 물류 | 컨테이너 | 선적보고",
+    "metadata": {
+      "stage": "선적완료",
+      "person": "물류",
+      "input": "컨테이너",
+      "output": "선적보고"
+    }
+  },
+  {
+    "id": 11,
+    "category": "internal_process",
+    "content": "ETA공유 | 물류 | 선박스케줄 | ETA공지",
+    "metadata": {
+      "stage": "ETA공유",
+      "person": "물류",
+      "input": "선박스케줄",
+      "output": "ETA공지"
+    }
+  },
+  {
+    "id": 12,
+    "category": "internal_process",
+    "content": "통관서류전달 | 영업 | BL/invoice | 통관세트",
+    "metadata": {
+      "stage": "통관서류전달",
+      "person": "영업",
+      "input": "BL/invoice",
+      "output": "통관세트"
+    }
+  },
+  {
+    "id": 13,
+    "category": "internal_process",
+    "content": "통관진행 | 관세사 | 서류 | 통관완료",
+    "metadata": {
+      "stage": "통관진행",
+      "person": "관세사",
+      "input": "서류",
+      "output": "통관완료"
+    }
+  },
+  {
+    "id": 14,
+    "category": "internal_process",
+    "content": "입고확인 | 창고 | 입고서 | 입고완료",
+    "metadata": {
+      "stage": "입고확인",
+      "person": "창고",
+      "input": "입고서",
+      "output": "입고완료"
+    }
+  },
+  {
+    "id": 15,
+    "category": "internal_process",
+    "content": "품질확인 | QC | 샘플 | 검사결과",
+    "metadata": {
+      "stage": "품질확인",
+      "person": "QC",
+      "input": "샘플",
+      "output": "검사결과"
+    }
+  },
+  {
+    "id": 16,
+    "category": "internal_process",
+    "content": "거래처통보 | 영업 | 결과 | 메일",
+    "metadata": {
+      "stage": "거래처통보",
+      "person": "영업",
+      "input": "결과",
+      "output": "메일"
+    }
+  },
+  {
+    "id": 17,
+    "category": "internal_process",
+    "content": "정산요청 | 회계 | invoice | 비용확정",
+    "metadata": {
+      "stage": "정산요청",
+      "person": "회계",
+      "input": "invoice",
+      "output": "비용확정"
+    }
+  },
+  {
+    "id": 18,
+    "category": "internal_process",
+    "content": "환율확인 | 회계 | 환율 | 정산액",
+    "metadata": {
+      "stage": "환율확인",
+      "person": "회계",
+      "input": "환율",
+      "output": "정산액"
+    }
+  },
+  {
+    "id": 19,
+    "category": "internal_process",
+    "content": "세금계산서 | 회계 | 거래내역 | 세금계산서",
+    "metadata": {
+      "stage": "세금계산서",
+      "person": "회계",
+      "input": "거래내역",
+      "output": "세금계산서"
+    }
+  },
+  {
+    "id": 20,
+    "category": "internal_process",
+    "content": "거래종료 | 전부서 | 전체 | 완료보고",
+    "metadata": {
+      "stage": "거래종료",
+      "person": "전부서",
+      "input": "전체",
+      "output": "완료보고"
+    }
+  }
+]

@@ -1,0 +1,122 @@
+[
+  {
+    "id": 1,
+    "category": "claims",
+    "content": "mold 발생",
+    "metadata": {}
+  },
+  {
+    "id": 2,
+    "category": "claims",
+    "content": "bag torn",
+    "metadata": {}
+  },
+  {
+    "id": 3,
+    "category": "claims",
+    "content": "weight shortage",
+    "metadata": {}
+  },
+  {
+    "id": 4,
+    "category": "claims",
+    "content": "moisture 초과",
+    "metadata": {}
+  },
+  {
+    "id": 5,
+    "category": "claims",
+    "content": "wrong grade",
+    "metadata": {}
+  },
+  {
+    "id": 6,
+    "category": "claims",
+    "content": "late shipment",
+    "metadata": {}
+  },
+  {
+    "id": 7,
+    "category": "claims",
+    "content": "BL error",
+    "metadata": {}
+  },
+  {
+    "id": 8,
+    "category": "claims",
+    "content": "quantity mismatch",
+    "metadata": {}
+  },
+  {
+    "id": 9,
+    "category": "claims",
+    "content": "insurance claim",
+    "metadata": {}
+  },
+  {
+    "id": 10,
+    "category": "claims",
+    "content": "container damage",
+    "metadata": {}
+  },
+  {
+    "id": 11,
+    "category": "claims",
+    "content": "insect 발견",
+    "metadata": {}
+  },
+  {
+    "id": 12,
+    "category": "claims",
+    "content": "smell issue",
+    "metadata": {}
+  },
+  {
+    "id": 13,
+    "category": "claims",
+    "content": "delay penalty",
+    "metadata": {}
+  },
+  {
+    "id": 14,
+    "category": "claims",
+    "content": "SGS mismatch",
+    "metadata": {}
+  },
+  {
+    "id": 15,
+    "category": "claims",
+    "content": "port storage fee",
+    "metadata": {}
+  },
+  {
+    "id": 16,
+    "category": "claims",
+    "content": "sample mismatch",
+    "metadata": {}
+  },
+  {
+    "id": 17,
+    "category": "claims",
+    "content": "packaging defect",
+    "metadata": {}
+  },
+  {
+    "id": 18,
+    "category": "claims",
+    "content": "color issue",
+    "metadata": {}
+  },
+  {
+    "id": 19,
+    "category": "claims",
+    "content": "roasting test fail",
+    "metadata": {}
+  },
+  {
+    "id": 20,
+    "category": "claims",
+    "content": "partial damage",
+    "metadata": {}
+  }
+]

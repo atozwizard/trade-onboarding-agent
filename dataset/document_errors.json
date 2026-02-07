@@ -1,0 +1,122 @@
+[
+  {
+    "id": 1,
+    "category": "document_errors",
+    "content": "BL date mismatch",
+    "metadata": {}
+  },
+  {
+    "id": 2,
+    "category": "document_errors",
+    "content": "invoice amount mismatch",
+    "metadata": {}
+  },
+  {
+    "id": 3,
+    "category": "document_errors",
+    "content": "consignee 오타",
+    "metadata": {}
+  },
+  {
+    "id": 4,
+    "category": "document_errors",
+    "content": "notify party 누락",
+    "metadata": {}
+  },
+  {
+    "id": 5,
+    "category": "document_errors",
+    "content": "HS code 오류",
+    "metadata": {}
+  },
+  {
+    "id": 6,
+    "category": "document_errors",
+    "content": "package count mismatch",
+    "metadata": {}
+  },
+  {
+    "id": 7,
+    "category": "document_errors",
+    "content": "weight mismatch",
+    "metadata": {}
+  },
+  {
+    "id": 8,
+    "category": "document_errors",
+    "content": "origin 누락",
+    "metadata": {}
+  },
+  {
+    "id": 9,
+    "category": "document_errors",
+    "content": "insurance 금액 오류",
+    "metadata": {}
+  },
+  {
+    "id": 10,
+    "category": "document_errors",
+    "content": "서명 누락",
+    "metadata": {}
+  },
+  {
+    "id": 11,
+    "category": "document_errors",
+    "content": "stamp 누락",
+    "metadata": {}
+  },
+  {
+    "id": 12,
+    "category": "document_errors",
+    "content": "shipping mark 오류",
+    "metadata": {}
+  },
+  {
+    "id": 13,
+    "category": "document_errors",
+    "content": "container no 오류",
+    "metadata": {}
+  },
+  {
+    "id": 14,
+    "category": "document_errors",
+    "content": "seal no 오류",
+    "metadata": {}
+  },
+  {
+    "id": 15,
+    "category": "document_errors",
+    "content": "currency 오류",
+    "metadata": {}
+  },
+  {
+    "id": 16,
+    "category": "document_errors",
+    "content": "freight term 오류",
+    "metadata": {}
+  },
+  {
+    "id": 17,
+    "category": "document_errors",
+    "content": "incoterm 누락",
+    "metadata": {}
+  },
+  {
+    "id": 18,
+    "category": "document_errors",
+    "content": "LC 조건 누락",
+    "metadata": {}
+  },
+  {
+    "id": 19,
+    "category": "document_errors",
+    "content": "bank 정보 오류",
+    "metadata": {}
+  },
+  {
+    "id": 20,
+    "category": "document_errors",
+    "content": "port code 오류",
+    "metadata": {}
+  }
+]

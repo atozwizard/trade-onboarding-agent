@@ -1,0 +1,122 @@
+[
+  {
+    "id": 1,
+    "category": "country_rules",
+    "content": "브라질: FOB 선호",
+    "metadata": {}
+  },
+  {
+    "id": 2,
+    "category": "country_rules",
+    "content": "베트남: 가격 협상 빠름",
+    "metadata": {}
+  },
+  {
+    "id": 3,
+    "category": "country_rules",
+    "content": "에티오피아: 선적 지연 잦음",
+    "metadata": {}
+  },
+  {
+    "id": 4,
+    "category": "country_rules",
+    "content": "콜롬비아: 품질 엄격",
+    "metadata": {}
+  },
+  {
+    "id": 5,
+    "category": "country_rules",
+    "content": "인도네시아: 문서 요구 많음",
+    "metadata": {}
+  },
+  {
+    "id": 6,
+    "category": "country_rules",
+    "content": "독일: 계약서 중요",
+    "metadata": {}
+  },
+  {
+    "id": 7,
+    "category": "country_rules",
+    "content": "미국: 응답 빠름",
+    "metadata": {}
+  },
+  {
+    "id": 8,
+    "category": "country_rules",
+    "content": "일본: 클레임 엄격",
+    "metadata": {}
+  },
+  {
+    "id": 9,
+    "category": "country_rules",
+    "content": "이탈리아: 샘플 요구 많음",
+    "metadata": {}
+  },
+  {
+    "id": 10,
+    "category": "country_rules",
+    "content": "멕시코: LC 선호",
+    "metadata": {}
+  },
+  {
+    "id": 11,
+    "category": "country_rules",
+    "content": "중국: 가격 민감",
+    "metadata": {}
+  },
+  {
+    "id": 12,
+    "category": "country_rules",
+    "content": "인도: 조건 변경 잦음",
+    "metadata": {}
+  },
+  {
+    "id": 13,
+    "category": "country_rules",
+    "content": "터키: 환율 민감",
+    "metadata": {}
+  },
+  {
+    "id": 14,
+    "category": "country_rules",
+    "content": "UAE: 결제 느림",
+    "metadata": {}
+  },
+  {
+    "id": 15,
+    "category": "country_rules",
+    "content": "태국: 안정적",
+    "metadata": {}
+  },
+  {
+    "id": 16,
+    "category": "country_rules",
+    "content": "프랑스: 품질 중심",
+    "metadata": {}
+  },
+  {
+    "id": 17,
+    "category": "country_rules",
+    "content": "스페인: 소량 주문",
+    "metadata": {}
+  },
+  {
+    "id": 18,
+    "category": "country_rules",
+    "content": "캐나다: 문서 정확성 중요",
+    "metadata": {}
+  },
+  {
+    "id": 19,
+    "category": "country_rules",
+    "content": "영국: 보험 요구",
+    "metadata": {}
+  },
+  {
+    "id": 20,
+    "category": "country_rules",
+    "content": "호주: quarantine 엄격",
+    "metadata": {}
+  }
+]
