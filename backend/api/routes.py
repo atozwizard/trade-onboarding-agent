@@ -5,7 +5,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 
-from backend.agents.quiz_agent import generate_quiz, evaluate_answer
+from backend.agents.quiz_agent import generate_quiz, evaluate_answer, _quiz_store
+from backend.agents.eval_agent import evaluate_quiz
 
 router = APIRouter()
 
@@ -33,6 +34,12 @@ class QuizAnswerRequest(BaseModel):
     """퀴즈 답안 제출 요청"""
     quiz_id: str
     answer: int = Field(ge=0, le=3, description="선택한 보기 인덱스 (0~3)")
+
+
+class QuizEvalRequest(BaseModel):
+    """퀴즈 품질 평가 요청"""
+    quiz_id: str
+    topic: str = Field(default="general", description="주제 (원본 데이터 대조용)")
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -72,5 +79,24 @@ async def answer_quiz(request: QuizAnswerRequest):
 
     if "error" in result["response"]:
         raise HTTPException(status_code=404, detail=result["response"]["error"])
+
+    return result
+
+
+@router.post("/quiz/evaluate")
+async def eval_quiz(request: QuizEvalRequest):
+    """생성된 퀴즈의 품질을 평가하여 검증 리포트를 반환한다."""
+    quiz_data = _quiz_store.get(request.quiz_id)
+
+    if not quiz_data:
+        raise HTTPException(status_code=404, detail=f"퀴즈 ID '{request.quiz_id}'를 찾을 수 없습니다.")
+
+    result = await evaluate_quiz(
+        quiz_data=quiz_data,
+        topic=request.topic,
+    )
+
+    if "error" in result["response"]:
+        raise HTTPException(status_code=500, detail=result["response"]["error"])
 
     return result
