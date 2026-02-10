@@ -1,3 +1,4 @@
+"""
 persist_directory="backend/vectorstore"
 content: "partial damage","bag tearing 발생","납기 지연으로 클레임 발생"
 
@@ -45,3 +46,4 @@ ingest.py
 4. solar embedding
 5. chroma insert
 6. persist
+"""
