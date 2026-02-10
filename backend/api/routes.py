@@ -2,8 +2,10 @@
 API Routes
 """
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
+
+from backend.agents.quiz_agent import generate_quiz, evaluate_answer
 
 router = APIRouter()
 
@@ -21,6 +23,18 @@ class ChatResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
+class QuizRequest(BaseModel):
+    """퀴즈 생성 요청"""
+    topic: str = Field(default="general", description="주제: general, mistakes, negotiation, country, documents")
+    difficulty: str = Field(default="easy", description="난이도: easy, medium, hard")
+
+
+class QuizAnswerRequest(BaseModel):
+    """퀴즈 답안 제출 요청"""
+    quiz_id: str
+    answer: int = Field(ge=0, le=3, description="선택한 보기 인덱스 (0~3)")
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
@@ -35,26 +49,28 @@ async def chat(request: ChatRequest):
 
 
 @router.post("/quiz/start")
-async def start_quiz(topic: str = "general", difficulty: str = "easy"):
-    """
-    Start a new quiz session
-    """
-    # TODO: Implement quiz generation
-    return {
-        "message": "퀴즈 생성 기능을 구현해주세요.",
-        "topic": topic,
-        "difficulty": difficulty
-    }
+async def start_quiz(request: QuizRequest):
+    """퀴즈를 생성하여 반환한다."""
+    result = await generate_quiz(
+        topic=request.topic,
+        difficulty=request.difficulty,
+    )
+
+    if "error" in result["response"]:
+        raise HTTPException(status_code=500, detail=result["response"]["error"])
+
+    return result
 
 
 @router.post("/quiz/answer")
-async def answer_quiz(quiz_id: str, answer: int):
-    """
-    Submit quiz answer and get feedback
-    """
-    # TODO: Implement quiz evaluation
-    return {
-        "message": "퀴즈 채점 기능을 구현해주세요.",
-        "quiz_id": quiz_id,
-        "answer": answer
-    }
+async def answer_quiz(request: QuizAnswerRequest):
+    """퀴즈 답안을 채점하고 해설을 반환한다."""
+    result = await evaluate_answer(
+        quiz_id=request.quiz_id,
+        user_answer=request.answer,
+    )
+
+    if "error" in result["response"]:
+        raise HTTPException(status_code=404, detail=result["response"]["error"])
+
+    return result
