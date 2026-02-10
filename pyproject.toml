@@ -1,0 +1,39 @@
+[project]
+name = "trade-onboarding-agent"
+version = "0.1.0"
+description = "물류·무역 온보딩 AI 코치"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    # FastAPI Backend
+    "fastapi>=0.109.0,<0.120.0",
+    "uvicorn[standard]>=0.27.0,<0.35.0",
+    "pydantic>=2.5.0,<3.0.0",
+    "pydantic-settings>=2.1.0,<3.0.0",
+    "python-dotenv>=1.0.0",
+    "python-multipart>=0.0.6",
+
+    # LLM & RAG
+    "langchain>=0.3.0",
+    "langchain-community>=0.3.0",
+    "langchain-upstage>=0.7.0",
+    "chromadb>=0.5.0",
+    "sentence-transformers>=2.3.0",
+
+    # Frontend
+    "streamlit>=1.40.0",
+
+    # Utilities
+    "requests>=2.31.0",
+    "httpx>=0.26.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend", "frontend"]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]

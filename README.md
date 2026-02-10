@@ -17,165 +17,168 @@ TradeOnboarding Agent는 선박 기반 수출입 무역회사 신입사원의 �
 
 ### Backend
 - **Framework**: FastAPI
-- **LLM**: Upstage Solar API (solar-pro-preview-240910)
-- **Embedding**: Upstage Solar Embedding (solar-embedding-1-large)
-- **Vector Store**: FAISS (local)
-- **Agent Framework**: LangGraph
-- **Tracing**: LangSmith
+- **LLM**: Upstage Solar API
+- **Embedding**: Upstage Solar Embedding
+- **Vector Store**: ChromaDB
+- **Agent Framework**: LangChain
+- **Package Manager**: uv (fast Python package manager)
 
 ### Frontend
-- **Framework**: Next.js 14
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
+- **Framework**: Streamlit
+- **Language**: Python
 
 ## 📁 Project Structure
 
 ```
-trade-ai-agent/
+trade-onboarding-agent/
 ├── backend/
 │   ├── main.py                 # FastAPI application
-│   ├── requirements.txt
+│   ├── config.py               # Environment configuration
 │   ├── agents/                 # Agent implementations
-│   │   ├── orchestrator.py
-│   │   ├── quiz_agent.py
-│   │   ├── email_agent.py
-│   │   ├── mistake_agent.py
-│   │   └── ceo_agent.py
+│   │   ├── orchestrator.py     # Intent routing
+│   │   ├── quiz_agent.py       # #1 Quiz learning
+│   │   ├── email_agent.py      # #2 Email coaching
+│   │   ├── mistake_agent.py    # #3 Mistake prediction
+│   │   └── ceo_agent.py        # #4 CEO simulation
 │   ├── rag/                    # RAG system
-│   │   ├── embeddings.py
-│   │   ├── retriever.py
-│   │   └── context_builder.py
-│   ├── utils/
-│   │   └── data_parser.py      # Data preprocessing
-│   └── api/                    # API endpoints
+│   │   ├── retriever.py        # Vector search
+│   │   └── data/               # Embeddings
+│   ├── prompts/                # LLM prompts
+│   │   ├── quiz_prompt.txt
+│   │   ├── email_prompt.txt
+│   │   ├── mistake_prompt.txt
+│   │   └── ceo_prompt.txt
+│   └── api/
+│       └── routes.py           # API endpoints
 │
-├── dataset/                     # Processed data
-│   ├── raw/                    # Original markdown files
-│   ├── *.json                  # Structured JSON data
-│   └── embeddings/             # FAISS indexes
+├── frontend/
+│   └── app.py                  # Streamlit UI
 │
-└── frontend/                    # Next.js application
-    └── (to be implemented)
+├── dataset/                    # Structured data
+│   ├── raw/                    # Original markdown
+│   └── *.json                  # 200+ data points
+│
+├── pyproject.toml              # uv project config
+├── uv.lock                     # Dependency lock file
+└── .env                        # Environment variables
 ```
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- Python 3.9+
-- Node.js 18+
-- Upstage API Key
+- **Python 3.11+**
+- **uv** (fast Python package manager)
+- **Upstage API Key**
 - LangSmith API Key (optional, for tracing)
 
-### Backend Setup
+### Installation
 
-1. **Clone and navigate to backend**
+#### 1. Install uv (if not installed)
 ```bash
-cd trade-ai-agent/backend
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-2. **Create virtual environment**
+#### 2. Clone repository
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+git clone <repository-url>
+cd trade-onboarding-agent
 ```
 
-3. **Install dependencies**
+#### 3. Install dependencies
 ```bash
-pip install -r requirements.txt
+# This creates .venv and installs all packages
+uv sync
 ```
 
-4. **Set up environment variables**
+#### 4. Set up environment variables
 ```bash
-cp ../.env.example .env
-# Edit .env and add your API keys:
-# UPSTAGE_API_KEY=your_key_here
-# LANGSMITH_API_KEY=your_key_here (optional)
+# Copy example and edit
+cp .env.example .env
+
+# Add your API keys to .env:
+# UPSTAGE_API_KEY=your_actual_api_key_here
 ```
 
-5. **Process data and build embeddings**
-```bash
-# Parse dummy data to JSON
-cd utils
-python data_parser.py
-cd ..
+### Running the Application
 
-# Build FAISS indexes
-cd rag
-python retriever.py
-cd ..
+#### Backend (FastAPI)
+```bash
+uv run uvicorn backend.main:app --reload
 ```
 
-6. **Run the server**
-```bash
-uvicorn main:app --reload
-```
-
-The API will be available at `http://localhost:8000`
-
-### API Documentation
-
-Once the server is running, visit:
+The API will be available at:
+- API: `http://localhost:8000`
 - Swagger UI: `http://localhost:8000/docs`
 - ReDoc: `http://localhost:8000/redoc`
+
+#### Frontend (Streamlit)
+Open a new terminal and run:
+```bash
+uv run streamlit run frontend/app.py
+```
+
+The UI will be available at `http://localhost:8501`
 
 ## 📡 API Endpoints
 
 ### Main Endpoints
 
+- `GET /` - Root endpoint (health check)
+- `GET /health` - Health check
 - `POST /api/chat` - Main chat interface (auto-routes to appropriate agent)
-- `POST /api/quiz/generate` - Generate a quiz
-- `POST /api/email/coach` - Get email feedback
-- `POST /api/mistake/predict` - Predict potential mistakes
-- `POST /api/ceo/simulate` - Simulate CEO interaction
-- `GET /api/health` - Health check
-- `GET /api/agents` - List available agents
+- `POST /api/quiz/start` - Start a new quiz session
+- `POST /api/quiz/answer` - Submit quiz answer
 
 ### Example Usage
+
+**Health Check:**
+```bash
+curl http://localhost:8000/health
+```
 
 **Chat Request:**
 ```bash
 curl -X POST http://localhost:8000/api/chat \
   -H "Content-Type: application/json" \
   -d '{
-    "message": "BL에 대한 퀴즈를 내줘"
+    "message": "물류 퀴즈 풀고 싶어",
+    "context": {"mode": "quiz"}
   }'
 ```
 
-**Email Coaching:**
+**Quiz Start:**
 ```bash
-curl -X POST http://localhost:8000/api/email/coach \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email_draft": "Dear buyer, The shipment will be delayed."
-  }'
+curl -X POST "http://localhost:8000/api/quiz/start?topic=BL&difficulty=easy"
 ```
 
-## 🧪 Testing
+## 🧪 Development
 
-### Test Individual Agents
+### Adding New Packages
 
 ```bash
-# Test Quiz Agent
-cd agents
-python quiz_agent.py
+# Add a regular dependency
+uv add <package-name>
 
-# Test Email Agent
-python email_agent.py
-
-# Test Mistake Agent
-python mistake_agent.py
-
-# Test CEO Agent
-python ceo_agent.py
+# Add a development dependency
+uv add --dev <package-name>
 ```
 
-### Test RAG System
+### Running Tests
 
 ```bash
-cd rag
-python retriever.py
-python context_builder.py
+# Run with pytest (when implemented)
+uv run pytest
+```
+
+### Code Formatting
+
+```bash
+# Format with black
+uv run black backend/ frontend/
+
+# Lint with ruff
+uv run ruff check backend/ frontend/
 ```
 
 ## 📊 Data
@@ -231,38 +234,62 @@ The orchestrator automatically detects intent and routes to the appropriate agen
 - **"실수", "mistake", "주의"** → Mistake Predictor
 - **Default** → General Q&A
 
-## 📈 Future Enhancements
+## 📈 Development Roadmap
 
-- [ ] Frontend implementation (Next.js)
-- [ ] User authentication
-- [ ] Progress tracking dashboard
-- [ ] Real-time chat with WebSocket
-- [ ] Multi-language support
-- [ ] Integration with actual company data
-- [ ] Mobile app
+### Day 1 오전 (완료)
+- [x] 프로젝트 구조 생성
+- [x] FastAPI 기본 서버 세팅
+- [x] Streamlit 기본 UI 세팅
+- [x] uv 기반 패키지 관리
 
-## 🤝 Contributing
+### Day 1 오후 ~ Day 3 오전
+- [ ] #1 퀴즈 학습 기능 (Quiz Agent)
+- [ ] #2 이메일 코칭 기능 (Email Agent)
+- [ ] #3 실수 예측 기능 (Mistake Agent)
+- [ ] #4 대표 시뮬레이션 기능 (CEO Agent)
 
-This is an MVP project. Contributions are welcome!
+### Day 3 오후
+- [ ] 통합 연동 (Orchestrator)
+- [ ] RAG 시스템 구현
+- [ ] ChromaDB 세팅
+
+### Day 4 오전
+- [ ] 대시보드 구현
+- [ ] 최종 테스트
+
+### Day 4 오후
+- [ ] 배포
+- [ ] 발표 준비
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+**uv not found:**
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source ~/.bashrc  # or ~/.zshrc
+```
+
+**Import errors:**
+```bash
+# Make sure you're using uv run
+uv run python backend/main.py
+```
+
+**Environment variables not loaded:**
+```bash
+# Check .env file exists and has correct values
+cat .env
+```
 
 ## 📄 License
 
 MIT License
-
-## 👥 Authors
-
-- AI Agent Development Team
 
 ## 🙏 Acknowledgments
 
 - Upstage for Solar API
 - LangChain for agent framework
 - FastAPI for backend framework
-
-
- 다음 단계:
-
-.env 파일에 API 키 설정 필요 (UPSTAGE_API_KEY, LANGSMITH_API_KEY)
-가상환경 생성 및 의존성 설치
-FAISS 인덱스 빌드
-백엔드 서버 실행 및 테스트
+- Streamlit for frontend framework
