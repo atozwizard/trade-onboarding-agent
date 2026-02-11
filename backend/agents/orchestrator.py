@@ -21,7 +21,7 @@ class OrchestratorAgent:
     """
     agent_type: str = "orchestrator"
     system_prompt: str = "" # To store the loaded system prompt
-
+    
     def __init__(self):
         self.system_prompt = _load_prompt("orchestrator.txt")
         # print(self.system_prompt)
