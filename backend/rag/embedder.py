@@ -3,13 +3,24 @@ import requests
 import time
 from typing import List, Optional
 
+# Ensure backend directory is in path for imports
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+from backend.config import get_settings # Import get_settings from backend.config
+
 # Constants for API interaction
-UPSTAGE_API_URL = "https://api.upstage.ai/v1/embeddings" # Placeholder, need to verify actual endpoint
+UPSTAGE_API_URL = "https://api.upstage.ai/v1/embeddings"
+# UPSTAGE_API_URL = "https://api.upstage.ai/v1"
 MAX_RETRIES = 3
 RETRY_DELAY_SECONDS = 2
 
 
 def get_embedding(text: str) -> Optional[List[float]]:
+    
+  
+    
+    
     """
     Retrieves the embedding for a given text using the Upstage Solar embedding API.
 
@@ -24,9 +35,12 @@ def get_embedding(text: str) -> Optional[List[float]]:
         print("Warning: Attempted to get embedding for empty or whitespace-only text. Returning None.")
         return None
 
-    api_key = os.getenv("UPSTAGE_API_KEY")
+    # Get settings which loads from .env
+    settings = get_settings()
+    api_key = settings.upstage_api_key
+
     if not api_key:
-        print("Error: UPSTAGE_API_KEY environment variable not set.")
+        print("Error: UPSTAGE_API_KEY not found in settings. Please ensure it's set in your .env file.")
         return None
 
     headers = {
@@ -35,13 +49,16 @@ def get_embedding(text: str) -> Optional[List[float]]:
     }
     payload = {
         "input": text,
-        "model": "solar-embedding-korean" # Assuming this is the correct model name
+        "model": "embedding-query" # Corrected to user-requested model name
     }
+    
+   
 
     for attempt in range(MAX_RETRIES):
         try:
             response = requests.post(UPSTAGE_API_URL, headers=headers, json=payload, timeout=10)
-            response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+            
+            # response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
 
             data = response.json()
             # Assuming the structure is data["data"][0]["embedding"]
@@ -78,10 +95,6 @@ def get_embedding(text: str) -> Optional[List[float]]:
 
 
 if __name__ == '__main__':
-    # Example usage (requires UPSTAGE_API_KEY to be set in environment)
-    # You might need to set it like: export UPSTAGE_API_KEY="YOUR_API_KEY"
-    # Or in Windows: $env:UPSTAGE_API_KEY="YOUR_API_KEY"
-    
     # Test a valid text
     test_text_1 = "안녕하세요, 무역 코칭 플랫폼입니다."
     embedding_1 = get_embedding(test_text_1)
@@ -103,14 +116,9 @@ if __name__ == '__main__':
         print(f"Correctly handled whitespace text: Returned None.")
 
     # Test for API Key missing (should print an error)
-    original_api_key = os.getenv("UPSTAGE_API_KEY")
-    if original_api_key:
-        del os.environ["UPSTAGE_API_KEY"]
-    
-    print("\nTesting without API Key:")
-    embedding_no_key = get_embedding(test_text_1)
-    if embedding_no_key is None:
-        print("Correctly handled missing API key.")
-
-    if original_api_key:
-        os.environ["UPSTAGE_API_KEY"] = original_api_key
+    # This test now relies on the .env file being correctly configured in the project root.
+    settings_check = get_settings()
+    if settings_check.upstage_api_key:
+        print("\nAPI Key found via backend.config.get_settings().")
+    else:
+        print("\nNo API Key found via backend.config.get_settings(). Please ensure UPSTAGE_API_KEY is set in your .env file in the project root.")

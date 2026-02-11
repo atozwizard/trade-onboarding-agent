@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 from typing import List, Dict, Any, Optional
 
 # Ensure backend directory is in path for imports

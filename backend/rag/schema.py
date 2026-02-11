@@ -133,8 +133,11 @@ if __name__ == '__main__':
     entry_1 = {"id": 1, "category": "test_cat", "content": "test content", "metadata": {}}
     normalized_1 = normalize_metadata(entry_1, "test_file_1.json")
     print(f"Normalized: {normalized_1}")
+    
+    
     assert normalized_1["source_dataset"] == "test_file_1.json"
     assert normalized_1["original_category"] == "test_cat"
+    # assert normalized_1["document_type"] == "test_cat"
     assert normalized_1["document_type"] == "document" # Generic fallback
     assert normalized_1["role"] == ["unknown"]
     assert normalized_1["situation"] == ["general"]
