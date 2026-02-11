@@ -8,6 +8,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 
 from backend.rag.chroma_client import get_or_create_collection
 from backend.rag.embedder import get_embedding
+from backend.config import get_settings
 
 def search(query: str, k: int = 5) -> List[Dict[str, Any]]:
     """
@@ -160,9 +161,10 @@ if __name__ == '__main__':
     print("--- Retriever Test ---")
 
     # Ensure environment variable is set for embedding
-    if os.getenv("UPSTAGE_API_KEY") is None:
-        print("Please set the UPSTAGE_API_KEY environment variable to run retriever tests.")
-        print("Example: export UPSTAGE_API_KEY='your_api_key'")
+    settings = get_settings()
+    if not settings.upstage_api_key:
+        print("Please set the UPSTAGE_API_KEY in your .env file to run retriever tests.")
+        print("Example: UPSTAGE_API_KEY='your_api_key'")
         sys.exit(1)
 
     # Test basic search
