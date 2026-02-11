@@ -101,3 +101,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     ingest_data(reset=args.reset)
+#테스트완료
