@@ -24,7 +24,7 @@ class OrchestratorAgent:
 
     def __init__(self):
         self.system_prompt = _load_prompt("orchestrator.txt")
-
+        # print(self.system_prompt)
     def run(self, user_input: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """
         Analyzes user input to determine intent, routes the task to a sub-agent,

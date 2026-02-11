@@ -13,7 +13,7 @@ def _load_prompt(prompt_file_name: str) -> str:
         
     with open(prompt_path, 'r', encoding='utf-8') as f:
         return f.read()
-    print(prompt_file_name)
+    # print(prompt_file_name)
 class CEOAgent:
     """
     CEOAgen class for simulating executive decision-making.
