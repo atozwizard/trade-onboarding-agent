@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: list = ["http://localhost:8501", "http://localhost:3000"]
 
+    # Vector Database
+    vector_db_dir: str = "backend/vectorstore"
+    collection_name: str = "trade_coaching_knowledge"
+    auto_ingest_on_startup: bool = True  # 서버 시작 시 자동 임베딩 여부
+
     class Config:
         env_file = ".env"
         case_sensitive = False
