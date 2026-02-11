@@ -81,21 +81,58 @@ def search_with_filter(
         print("Error: Could not generate embedding for the query.")
         return []
 
-    where_clause = {}
+    # where_clause = {}
+    # if category:
+    #     where_clause["original_category"] = category
+    # if priority:
+    #     where_clause["priority"] = priority
+    # if level:
+    #     where_clause["level"] = level
+    # if document_type:
+    #     where_clause["document_type"] = document_type
+    # if role:
+    #     where_clause["role"] = {"$contains": role} # Assuming role can be a list in metadata
+    # if topic:
+    #     where_clause["topic"] = {"$contains": topic} # Assuming topic can be a list in metadata
+    # if situation:
+    #     where_clause["situation"] = {"$contains": situation} # Assuming situation can be a list in metadata
+        
+        
+        
+    # 1. 일단 조건에 맞는 필터들을 리스트에 '수집'만 합니다.   #debug : docs where_clause 딕셔너리 만드는 부분을 아래처럼 바꿈
+    filters = []
+    
     if category:
-        where_clause["original_category"] = category
+        filters.append({"original_category": category})
     if priority:
-        where_clause["priority"] = priority
+        filters.append({"priority": priority})
     if level:
-        where_clause["level"] = level
+        filters.append({"level": level})
     if document_type:
-        where_clause["document_type"] = document_type
+        filters.append({"document_type": document_type})
+    
+    # 리스트형 데이터($contains) 처리도 동일하게 리스트에 추가
     if role:
-        where_clause["role"] = {"$contains": role} # Assuming role can be a list in metadata
+        filters.append({"role": {"$contains": role}})
     if topic:
-        where_clause["topic"] = {"$contains": topic} # Assuming topic can be a list in metadata
+        filters.append({"topic": {"$contains": topic}})
     if situation:
-        where_clause["situation"] = {"$contains": situation} # Assuming situation can be a list in metadata
+        filters.append({"situation": {"$contains": situation}})
+
+    # 2. 여기서 딱 한 번만 판단해서 where_clause를 만듭니다.
+    if len(filters) > 1:
+        # 필터가 여러 개면 $and 상자에 담기
+        where_clause = {"$and": filters}
+    elif len(filters) == 1:
+        # 필터가 하나면 그 필터 그대로 사용
+        where_clause = filters[0]
+    else:
+        # 필터가 없으면 None
+        where_clause = None    
+
+        
+        
+        
 
 
     print(f"Executing search with filter: {where_clause if where_clause else 'None'}")
