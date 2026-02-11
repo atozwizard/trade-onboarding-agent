@@ -68,3 +68,4 @@ if __name__ == '__main__':
     print("\n--- Cleaning up ---")
     reset_collection()
     print("Test complete. Vectorstore cleaned up.")
+#테스트완료
