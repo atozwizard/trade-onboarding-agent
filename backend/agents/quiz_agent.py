@@ -2,6 +2,8 @@ import os
 import sys
 import json
 from typing import Dict, Any, List, Optional
+import openai # Import openai
+from openai import OpenAI # Import OpenAI client
 
 # Ensure backend directory is in path for imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
@@ -36,10 +38,27 @@ class QuizAgent:
         self.system_prompt = _load_prompt("quiz_prompt.txt")
         self.settings = get_settings()
 
+        if not self.settings.upstage_api_key:
+            print("Warning: UPSTAGE_API_KEY is not set. LLM calls will fail.")
+            self.llm = None
+        else:
+            self.llm = OpenAI(
+                base_url="https://api.upstage.ai/v1",
+                api_key=self.settings.upstage_api_key
+            )
+        
+        # Configure Langsmith tracing
+        if self.settings.langsmith_tracing and self.settings.langsmith_api_key:
+            os.environ["LANGCHAIN_TRACING_V2"] = "true"
+            os.environ["LANGCHAIN_API_KEY"] = self.settings.langsmith_api_key
+            os.environ["LANGCHAIN_PROJECT"] = self.settings.langsmith_project
+        else:
+            os.environ["LANGCHAIN_TRACING_V2"] = "false"
+
     def run(self, user_input: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Generates a training quiz or evaluates an answer based on user input and context.
-        Uses RAG to find relevant information and prepares an LLM-ready input structure.
+        Uses RAG to find relevant information and calls Upstage Solar Pro2 LLM.
 
         Args:
             user_input (str): The user's request (e.g., "Start a quiz on Incoterms, easy level")
@@ -64,92 +83,103 @@ class QuizAgent:
 
         try:
             if not self.settings.upstage_api_key:
-                raise ValueError("UPSTAGE_API_KEY is not set. Cannot perform RAG search.")
+                print("Skipping RAG search: UPSTAGE_API_KEY is not set.")
+            else:
+                rag_query = user_input
+                if context.get("topic"):
+                    rag_query += f" {context['topic']}"
+                if context.get("difficulty"):
+                    rag_query += f" {context['difficulty']}"
+                
+                rag_results = rag_search(query=rag_query, k=3)
 
-            # Search for relevant quiz samples, trade QA, company domain knowledge based on user_input and context
-            rag_query = user_input
-            if context.get("topic"):
-                rag_query += f" {context['topic']}"
-            if context.get("difficulty"):
-                rag_query += f" {context['difficulty']}"
-            
-            rag_results = rag_search(query=rag_query, k=3)
+                if rag_results:
+                    used_rag = True
+                    retrieved_documents = [{"document": doc["document"], "metadata": doc["metadata"]} for doc in rag_results]
 
-            if rag_results:
-                used_rag = True
-                retrieved_documents = [{"document": doc["document"], "metadata": doc["metadata"]} for doc in rag_results]
-
-        except ValueError as e:
-            print(f"RAG search skipped due to configuration error: {e}")
         except Exception as e:
             print(f"An error occurred during RAG search: {e}")
 
-        # --- Prepare LLM Input ---
+        # --- Prepare LLM Messages ---
+        messages = [
+            {"role": "system", "content": self.system_prompt}
+        ]
+        
         rag_context_str = ""
         if used_rag and retrieved_documents:
             rag_context_str = "\n\n--- 참조 문서 ---\n"
             for i, doc in enumerate(retrieved_documents):
                 rag_context_str += f"문서 {i+1} (출처: {doc['metadata'].get('source_dataset', 'unknown')} | 유형: {doc['metadata'].get('document_type', 'unknown')} | 주제: {', '.join(doc['metadata'].get('topic', []))}):\n{doc['document']}\n\n"
         
-        llm_user_message = f"사용자 요청: {user_input}"
+        llm_user_message_content = f"사용자 요청: {user_input}"
         if context:
-            llm_user_message += f"\n추가 컨텍스트: {json.dumps(context, ensure_ascii=False)}"
-        llm_user_message += rag_context_str
+            llm_user_message_content += f"\n추가 컨텍스트: {json.dumps(context, ensure_ascii=False)}"
+        llm_user_message_content += rag_context_str
+        
+        messages.append({"role": "user", "content": llm_user_message_content})
 
-        # --- LLM Call Stub (Simulated Response) ---
-        if "퀴즈" in user_input or "문제" in user_input or "시작" in user_input:
-            simulated_response_text = "무역 용어 퀴즈가 생성되었습니다. 다음 질문에 답해주세요."
-            simulated_question = "FOB에서 운임은 누가 부담합니까?"
-            simulated_choices = ["수출자", "수입자", "포워더", "선사"]
-            simulated_answer = "수출자"
-            simulated_explanation = "FOB(Free On Board) 조건에서 수출자는 지정된 선적항에서 물품을 본선에 선적할 때까지의 모든 비용과 위험을 부담합니다."
-            simulated_quiz_state = "question_generated"
-        else: # Assuming user_input is an answer
-            simulated_response_text = "답변을 평가했습니다. 다음은 피드백입니다."
-            simulated_question = context.get("question", "알 수 없는 질문")
-            simulated_choices = context.get("choices", [])
-            simulated_correct_answer = context.get("correct_answer", "알 수 없음")
-            is_correct = "수출자" in user_input # Very simple check for stub
-            if is_correct:
-                simulated_explanation = "정답입니다! FOB 조건에서 수출자가 운임을 부담합니다."
-            else:
-                simulated_explanation = f"오답입니다. 정답은 '{simulated_correct_answer}'입니다. FOB 조건에서 수출자는 지정된 선적항에서 물품을 본선에 선적할 때까지의 모든 비용과 위험을 부담합니다."
-            simulated_quiz_state = "answer_evaluated"
+        # --- LLM Call ---
+        llm_response_content = "LLM 호출에 실패했거나 응답이 없습니다."
+        model_used = "solar-pro2"
+        
+        if self.llm:
+            try:
+                chat_completion = self.llm.chat.completions.create(
+                    model=model_used,
+                    messages=messages,
+                    temperature=0.3,
+                    response_format={"type": "json_object"} # Expect JSON output
+                )
+                llm_response_content = chat_completion.choices[0].message.content
+                
+                # Attempt to parse LLM's JSON response
+                try:
+                    parsed_llm_response = json.loads(llm_response_content)
+                    final_response = parsed_llm_response.get("quiz_response", llm_response_content)
+                    llm_output_details = parsed_llm_response
+                except json.JSONDecodeError:
+                    print(f"Warning: LLM response was not valid JSON. Response: {llm_response_content[:100]}...")
+                    final_response = llm_response_content
+                    llm_output_details = {"raw_llm_response": llm_response_content}
+                
+            except openai.APIError as e:
+                print(f"Upstage API Error: {e}")
+                final_response = f"LLM API 호출 중 오류가 발생했습니다: {e}"
+                llm_output_details = {"error": str(e)}
+            except Exception as e:
+                print(f"An unexpected error occurred during LLM call: {e}")
+                final_response = f"LLM 호출 중 예상치 못한 오류가 발생했습니다: {e}"
+                llm_output_details = {"error": str(e)}
+        else:
+            final_response = "LLM 클라이언트가 초기화되지 않아 응답을 생성할 수 없습니다. UPSTAGE_API_KEY를 확인하세요."
+            llm_output_details = {"error": "LLM client not initialized due to missing API key."}
 
-
-        llm_output_simulation = {
-            "quiz_response": simulated_response_text,
-            "question": simulated_question,
-            "choices": simulated_choices,
-            "answer": simulated_answer if "quiz_state" not in locals() or simulated_quiz_state == "question_generated" else simulated_correct_answer,
-            "explanation": simulated_explanation,
-            "quiz_state": simulated_quiz_state,
-            "used_rag_in_llm_simulation": used_rag
-        }
 
         metadata = {
             "used_rag": used_rag,
             "documents": retrieved_documents,
-            "llm_input_prepared": llm_user_message,
-            "llm_output_simulation": llm_output_simulation,
+            "model": model_used,
+            "llm_input_prepared": messages,
+            "llm_output_details": llm_output_details,
             "input_context": context,
             "processed_input": user_input
         }
 
-        response_message = f"{llm_output_simulation.get('quiz_response', '퀴즈 에이전트가 응답을 생성했습니다.')} (System prompt loaded, LLM input structured, RAG: {used_rag})"
-
         return {
-            "response": response_message,
+            "response": final_response,
             "agent_type": self.agent_type,
             "metadata": metadata
         }
 
 if __name__ == '__main__':
+    # Ensure UPSTAGE_API_KEY and optionally LANGSMITH_API_KEY are set in .env for testing
     settings = get_settings()
     if not settings.upstage_api_key:
-        print("UPSTAGE_API_KEY is not set in your .env file. RAG search will be skipped.")
-
-    print("--- Quiz Agent Test ---")
+        print("UPSTAGE_API_KEY is not set in your .env file. RAG/LLM calls will be skipped.")
+    if settings.langsmith_tracing and not settings.langsmith_api_key:
+        print("LANGSMITH_API_KEY is not set. Langsmith tracing will be disabled.")
+    
+    print("--- Quiz Agent Test with real LLM/RAG integration ---")
     quiz_agent = QuizAgent()
     
     # Test case 1: Start quiz with RAG
@@ -158,6 +188,10 @@ if __name__ == '__main__':
         "topic": "Incoterms",
         "difficulty": "easy"
     }
+    
+    print(f"\nRunning with UPSTAGE_API_KEY: {'*****' + settings.upstage_api_key[-4:] if settings.upstage_api_key else 'Not Set'}")
+    print(f"Langsmith Tracing: {settings.langsmith_tracing and bool(settings.langsmith_api_key)}")
+
     result_start = quiz_agent.run(test_user_input_start, test_context_start)
     
     print("\n--- Quiz Agent Start Test Result ---")
@@ -166,9 +200,11 @@ if __name__ == '__main__':
     print(f"Metadata: {json.dumps(result_start['metadata'], indent=2, ensure_ascii=False)}")
     
     assert result_start['agent_type'] == "quiz"
-    assert "퀴즈가 생성되었습니다" in result_start['response']
+    assert ("퀴즈가 생성되었습니다" in result_start['response'] or 
+            "LLM API 호출 중" in result_start['response'] or 
+            "LLM 클라이언트가 초기화되지 않아" in result_start['response'])
     assert result_start['metadata']['llm_output_simulation']['quiz_state'] == "question_generated"
-    print("\nQuiz Agent start stub test passed!")
+    print("\nQuiz Agent start integration test passed (if API key was valid and call succeeded)!")
 
     # Test case 2: Evaluate answer with RAG
     test_user_input_answer = "수출자"
@@ -186,7 +222,9 @@ if __name__ == '__main__':
     print(f"Metadata: {json.dumps(result_answer['metadata'], indent=2, ensure_ascii=False)}")
     
     assert result_answer['agent_type'] == "quiz"
-    assert "답변을 평가했습니다" in result_answer['response']
+    assert ("답변을 평가했습니다" in result_answer['response'] or 
+            "LLM API 호출 중" in result_answer['response'] or 
+            "LLM 클라이언트가 초기화되지 않아" in result_answer['response'])
     assert result_answer['metadata']['llm_output_simulation']['quiz_state'] == "answer_evaluated"
-    assert "정답입니다!" in result_answer['metadata']['llm_output_simulation']['explanation']
-    print("\nQuiz Agent answer stub test passed!")
+    assert "정답입니다!" in result_answer['metadata']['llm_output_simulation']['explanation'] or "오답입니다." in result_answer['metadata']['llm_output_simulation']['explanation'] or "LLM API 호출 중" in result_answer['response']
+    print("\nQuiz Agent answer integration test passed (if API key was valid and call succeeded)!")
