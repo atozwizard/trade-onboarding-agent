@@ -1,0 +1,263 @@
+[1] Mistake Predict – 최종 JSON 스키마 
+
+이 스키마는 “기업 리스크 탐지 (정량 + 통제 + 예방 + 근거를 포함)
+
+{
+  "analysis_id": "string",
+  "input_summary": "string",
+
+  "risk_factors": [
+    {
+      "risk_type": "documentation | incoterms | customs | payment | timeline | compliance | communication",
+      "trigger": "string",
+      "root_cause": "string",
+      "category": "financial | operational | compliance | reputational"
+    }
+  ],
+
+  "risk_scoring": {
+    "impact_score": 1,
+    "likelihood_score": 1,
+    "total_risk_score": 1,
+    "risk_level": "low | medium | high | critical"
+  },
+
+  "loss_simulation": {
+    "estimated_financial_loss_range": "string",
+    "estimated_delay": "string",
+    "secondary_impact": "string"
+  },
+
+  "control_gap_analysis": [
+    {
+      "missing_control": "string",
+      "control_type": "approval | checklist | system_validation | training"
+    }
+  ],
+
+  "prevention_strategy": {
+    "individual_level": ["string"],
+    "process_level": ["string"],
+    "system_level": ["string"]
+  },
+
+  "similar_cases": [
+    {
+      "case_summary": "string",
+      "lesson": "string"
+    }
+  ],
+
+  "confidence_score": 0.0,
+  "evidence_sources": [
+    {
+      "source_type": "mistake_case | internal_process | country_rule | document_error",
+      "reference": "string"
+    }
+  ]
+}
+
+[2] 코드 레벨 구조 설계
+import uuid
+from typing import Dict
+
+
+class MistakeRiskEngine:
+    def __init__(self):
+        pass
+
+    def calculate_risk_score(self, impact: int, likelihood: int) -> Dict:
+        total_score = impact * likelihood
+
+        if total_score <= 5:
+            level = "low"
+        elif total_score <= 10:
+            level = "medium"
+        elif total_score <= 15:
+            level = "high"
+        else:
+            level = "critical"
+
+        return {
+            "impact_score": impact,
+            "likelihood_score": likelihood,
+            "total_risk_score": total_score,
+            "risk_level": level,
+        }
+
+    def analyze(self, user_input: str) -> Dict:
+        analysis_id = str(uuid.uuid4())
+        input_summary = user_input
+
+        risk_factors = [
+            {
+                "risk_type": "documentation",
+                "trigger": "BL consignee mismatch",
+                "root_cause": "수하인 개념 오해",
+                "category": "operational",
+            }
+        ]
+
+        risk_scoring = self.calculate_risk_score(impact=4, likelihood=3)
+
+        loss_simulation = {
+            "estimated_financial_loss_range": "USD 1,500~3,000",
+            "estimated_delay": "2~4 days",
+            "secondary_impact": "바이어 신뢰도 하락",
+        }
+
+        control_gap_analysis = [
+            {"missing_control": "BL 2차 검토 절차 부재", "control_type": "approval"}
+        ]
+
+        prevention_strategy = {
+            "individual_level": ["BL 발행 전 consignee 필드 더블체크"],
+            "process_level": ["출항 24시간 전 문서 점검 회의 도입"],
+            "system_level": ["ERP 상 수하인 자동 매칭 검증 로직 도입"],
+        }
+
+        similar_cases = [
+            {
+                "case_summary": "Consignee 오기입으로 통관 지연 발생",
+                "lesson": "BL 작성 후 반드시 PO와 대조해야 함",
+            }
+        ]
+
+        return {
+            "analysis_id": analysis_id,
+            "input_summary": input_summary,
+            "risk_factors": risk_factors,
+            "risk_scoring": risk_scoring,
+            "loss_simulation": loss_simulation,
+            "control_gap_analysis": control_gap_analysis,
+            "prevention_strategy": prevention_strategy,
+            "similar_cases": similar_cases,
+            "confidence_score": 0.85,
+            "evidence_sources": [
+                {"source_type": "mistake_case", "reference": "BL_consignee_error_case_01"}
+            ],
+        }
+
+
+if __name__ == "__main__":
+    engine = MistakeRiskEngine()
+    result = engine.analyze("BL 초안 검토 중인데 consignee가 PO와 다르게 기재되어 있습니다.")
+    import json
+
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+
+[3] RAG 연결 데이터 설계
+
+import os
+import uuid
+import json
+from typing import Dict, List
+from dotenv import load_dotenv
+
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_upstage import ChatUpstage
+from langchain_core.output_parsers import JsonOutputParser
+
+from langchain.vectorstores import Chroma
+from langchain.embeddings import OpenAIEmbeddings
+
+
+load_dotenv()
+
+
+def calculate_risk_score(impact: int, likelihood: int) -> Dict:
+    total = impact * likelihood
+
+    if total <= 5:
+        level = "low"
+    elif total <= 10:
+        level = "medium"
+    elif total <= 15:
+        level = "high"
+    else:
+        level = "critical"
+
+    return {
+        "impact_score": impact,
+        "likelihood_score": likelihood,
+        "total_risk_score": total,
+        "risk_level": level
+    }
+
+
+class MistakePredictAgent:
+
+    def __init__(self):
+        self.llm = ChatUpstage(
+            model="solar-pro2",
+            temperature=0.2
+        )
+
+        self.parser = JsonOutputParser()
+
+        self.vectorstore = Chroma(
+            persist_directory="./vector_db",
+            embedding_function=OpenAIEmbeddings()
+        )
+
+    def retrieve_context(self, query: str) -> List[str]:
+        docs = self.vectorstore.similarity_search(query, k=3)
+        return [doc.page_content for doc in docs]
+
+    def analyze(self, user_input: str) -> Dict:
+
+        analysis_id = str(uuid.uuid4())
+
+        retrieved_context = self.retrieve_context(user_input)
+
+        prompt = ChatPromptTemplate.from_messages([
+            ("system",
+             "You are an enterprise trade risk detection AI. "
+             "Identify risk factors, root causes, and operational consequences. "
+             "All outputs MUST be structured JSON only."),
+            ("human",
+             """
+User Situation:
+{input}
+
+Relevant Context:
+{context}
+
+Return JSON with:
+- risk_factors
+- impact_score (1-5)
+- likelihood_score (1-5)
+- loss_description
+             """)
+        ])
+
+        chain = prompt | self.llm | self.parser
+
+        llm_result = chain.invoke({
+            "input": user_input,
+            "context": retrieved_context
+        })
+
+        impact = llm_result.get("impact_score", 3)
+        likelihood = llm_result.get("likelihood_score", 3)
+
+        risk_scoring = calculate_risk_score(impact, likelihood)
+
+        final_output = {
+            "analysis_id": analysis_id,
+            "input_summary": user_input,
+            "retrieved_context": retrieved_context,
+            "risk_factors": llm_result.get("risk_factors", []),
+            "risk_scoring": risk_scoring,
+            "loss_description": llm_result.get("loss_description", ""),
+            "confidence_score": 0.9
+        }
+
+        return final_output
+
+
+if __name__ == "__main__":
+    agent = MistakePredictAgent()
+    user_input = input("상황을 입력: ")
+    result = agent.analyze(user_input)
+    print(json.dumps(result, indent=2, ensure_ascii=False))

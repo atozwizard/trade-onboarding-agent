@@ -5,11 +5,17 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
+from backend.agents.orchestrator import Orchestrator # Import the Orchestrator
+
 router = APIRouter()
+
+# Instantiate the Orchestrator globally
+orchestrator = Orchestrator()
 
 
 class ChatRequest(BaseModel):
     """Chat request model"""
+    session_id: str # Added session_id
     message: str
     context: Optional[Dict[str, Any]] = None
 
@@ -26,12 +32,14 @@ async def chat(request: ChatRequest):
     """
     Main chat endpoint - routes to appropriate agent based on intent
     """
-    # TODO: Implement orchestrator logic
-    return ChatResponse(
-        response="서버가 정상 작동 중입니다. 오케스트레이터를 구현해주세요.",
-        agent_type="system",
-        metadata={"status": "not_implemented"}
+    orchestrator_result = orchestrator.run(
+        session_id=request.session_id,
+        user_input=request.message,
+        context=request.context
     )
+    
+    # The orchestrator_result['response'] is already in the format expected by ChatResponse
+    return ChatResponse(**orchestrator_result['response'])
 
 
 @router.post("/quiz/start")
