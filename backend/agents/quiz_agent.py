@@ -1,156 +1,178 @@
+"""
+퀴즈 학습 에이전트 (RAG 기반)
+- RAG 검색으로 참고 데이터를 가져와 퀴즈 소스로 활용
+- call_llm을 통해 4지선다 퀴즈 생성 및 답안 평가
+"""
+import json
+import uuid
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, Optional
 
-def _load_prompt(prompt_file_name: str) -> str:
-    # Assuming prompt files are in backend/prompts/ relative to the project root
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    # Adjust path to project root: current_dir (agents) -> parent (backend) -> parent (project_root)
-    project_root = os.path.abspath(os.path.join(current_dir, '..', '..'))
-    prompt_path = os.path.join(project_root, 'backend', 'prompts', prompt_file_name) # Prompts are under backend/prompts
-    
-    if not os.path.exists(prompt_path):
-        raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
-        
-    with open(prompt_path, 'r', encoding='utf-8') as f:
+from backend.utils.llm import call_llm
+from backend.rag.retriever import search_with_filter
+
+# 프롬프트 파일 경로
+PROMPTS_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), '..', 'prompts'
+)
+
+# 주제별 RAG 필터 매핑
+TOPIC_FILTER_MAP: Dict[str, Dict[str, Optional[str]]] = {
+    "general": {},
+    "mistakes": {"document_type": "common_mistake"},
+    "negotiation": {"document_type": "negotiation_strategy"},
+    "country": {"document_type": "country_guideline"},
+    "documents": {"document_type": "error_checklist"},
+}
+
+# 난이도 → level 매핑
+DIFFICULTY_LEVEL_MAP: Dict[str, str] = {
+    "easy": "beginner",
+    "medium": "working",
+    "hard": "manager",
+}
+
+# 생성된 퀴즈를 임시 저장 (quiz_id -> quiz_data)
+_quiz_store: Dict[str, Dict[str, Any]] = {}
+
+
+def _load_prompt(filename: str) -> str:
+    """프롬프트 파일을 읽어온다."""
+    prompt_path = os.path.join(PROMPTS_DIR, filename)
+    with open(prompt_path, "r", encoding="utf-8") as f:
         return f.read()
 
+
+def _parse_quiz_json(raw: str) -> Dict[str, Any]:
+    """LLM 응답에서 JSON을 파싱한다."""
+    text = raw.strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        lines = [l for l in lines if not l.strip().startswith("```")]
+        text = "\n".join(lines)
+    return json.loads(text)
+
+
+def _format_reference_data(docs: list) -> str:
+    """RAG 검색 결과를 참고 데이터 텍스트로 포맷한다."""
+    if not docs:
+        return "(참고 데이터 없음)"
+    lines = []
+    for doc in docs:
+        content = doc.get("document", "")
+        metadata = doc.get("metadata", {})
+        if metadata:
+            detail = " | ".join(
+                f"{k}: {v}" for k, v in metadata.items() if v
+            )
+            lines.append(f"- {content} ({detail})" if detail else f"- {content}")
+        else:
+            lines.append(f"- {content}")
+    return "\n".join(lines)
+
+
 class QuizAgent:
-    """
-    QuizAgent class for generating training quizzes and evaluating answers.
-    """
+    """RAG 기반 퀴즈 학습 에이전트"""
+
     agent_type: str = "quiz"
-    system_prompt: str = "" # To store the loaded system prompt
 
     def __init__(self):
         self.system_prompt = _load_prompt("quiz_prompt.txt")
 
-    def run(self, user_input: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Generates a training quiz or evaluates an answer based on user input and context.
-        This is a stub implementation. Real logic will involve LLM calls and RAG.
+    async def run(self, user_input: str, context: Dict[str, Any]) -> Dict[str, Any]:
+        """context["action"]에 따라 퀴즈 생성 또는 답안 채점을 수행한다."""
+        action = context.get("action", "generate")
 
-        Args:
-            user_input (str): The user's request (e.g., "Start a quiz on Incoterms, easy level")
-                              or their answer to a quiz question.
-            context (Dict[str, Any]): Additional context, potentially including RAG results
-                                       (e.g., quiz questions, correct answers, difficulty settings).
+        if action == "generate":
+            topic = context.get("topic", "general")
+            difficulty = context.get("difficulty", "easy")
+            return await self._generate_quiz(topic, difficulty)
+        elif action == "evaluate":
+            quiz_id = context.get("quiz_id", "")
+            user_answer = context.get("user_answer", 0)
+            return self._evaluate_answer(quiz_id, user_answer)
+        else:
+            return {
+                "response": f"알 수 없는 action: {action}",
+                "agent_type": self.agent_type,
+                "metadata": {},
+            }
 
-        Returns:
-            Dict[str, Any]: A dictionary containing the agent's response, type, and metadata.
-                            {
-                                "response": str,       # user-facing message
-                                "agent_type": str,     # "quiz"
-                                "metadata": dict       # structured extra data
-                            }
-        """
-        # Prepare LLM input structure
-        llm_input = {
-            "system_prompt": self.system_prompt,
-            "user_input": user_input,
-            "context": context
-        }
+    async def _generate_quiz(self, topic: str, difficulty: str) -> Dict[str, Any]:
+        """RAG 검색 + LLM을 사용하여 퀴즈를 생성한다."""
+        # 1) RAG 필터 구성
+        filters = TOPIC_FILTER_MAP.get(topic, {}).copy()
+        level = DIFFICULTY_LEVEL_MAP.get(difficulty, "beginner")
+        filters["level"] = level
 
-        # --- LLM Call Stub ---
-        # In a real implementation, this would involve calling an LLM API
-        # with llm_input and parsing its JSON response.
-        # For now, we simulate a response based on the previous stub logic.
-        
-        # Simple logic to distinguish between quiz start and answer
-        if "퀴즈" in user_input or "문제" in user_input or "시작" in user_input:
-            simulated_response = "무역 용어 퀴즈가 생성되었습니다. 다음 질문에 답해주세요."
-            simulated_question = "FOB에서 운임은 누가 부담합니까?"
-            simulated_choices = ["수출자", "수입자", "포워더", "선사"]
-            simulated_answer = "수출자"
-            simulated_explanation = "FOB(Free On Board) 조건에서 수출자는 지정된 선적항에서 물품을 본선에 선적할 때까지의 모든 비용과 위험을 부담합니다."
-            simulated_quiz_state = "question_generated"
-        else: # Assuming user_input is an answer
-            simulated_response = "답변을 평가했습니다. 다음은 피드백입니다."
-            simulated_question = context.get("question", "알 수 없는 질문")
-            simulated_choices = context.get("choices", [])
-            simulated_correct_answer = context.get("correct_answer", "알 수 없음")
-            is_correct = "수출자" in user_input # Very simple check for stub
-            if is_correct:
-                simulated_explanation = "정답입니다! FOB 조건에서 수출자가 운임을 부담합니다."
-            else:
-                simulated_explanation = f"오답입니다. 정답은 '{simulated_correct_answer}'입니다. FOB 조건에서 수출자는 지정된 선적항에서 물품을 본선에 선적할 때까지의 모든 비용과 위험을 부담합니다."
-            simulated_quiz_state = "answer_evaluated"
+        # 2) RAG 검색
+        query = f"{topic} 무역 퀴즈 {difficulty}"
+        docs = search_with_filter(query=query, k=5, **filters)
 
+        # 3) 참고 데이터 포맷
+        reference_data = _format_reference_data(docs)
 
-        metadata = {
-            "question": simulated_question,
-            "choices": simulated_choices,
-            "answer": simulated_answer if "quiz_state" not in locals() else simulated_correct_answer,
-            "explanation": simulated_explanation,
-            "quiz_state": simulated_quiz_state,
-            "llm_input_prepared": llm_input, # Include prepared LLM input for debugging/traceability
-            "processed_input": user_input
-        }
+        # 4) 프롬프트 조립
+        prompt = (
+            self.system_prompt
+            .replace("{reference_data}", reference_data)
+            .replace("{topic}", topic)
+            .replace("{difficulty}", difficulty)
+        )
 
-        response_message = f"{simulated_response} (System prompt loaded from file and LLM input structured.)"
+        # 5) LLM 호출
+        raw_response = await call_llm(
+            user_message="위 조건에 맞는 무역 퀴즈 1문제를 JSON으로 출제해주세요.",
+            system_prompt=prompt,
+        )
+
+        # 6) JSON 파싱
+        try:
+            quiz_data = _parse_quiz_json(raw_response)
+        except (json.JSONDecodeError, KeyError):
+            return {
+                "response": {"error": "퀴즈 생성에 실패했습니다. 다시 시도해주세요."},
+                "agent_type": self.agent_type,
+                "metadata": {"topic": topic, "difficulty": difficulty, "raw": raw_response},
+            }
+
+        # 7) 퀴즈 저장 (채점용)
+        quiz_id = str(uuid.uuid4())[:8]
+        _quiz_store[quiz_id] = quiz_data
 
         return {
-            "response": response_message,
+            "response": {
+                "quiz_id": quiz_id,
+                "question": quiz_data["question"],
+                "choices": quiz_data["choices"],
+            },
             "agent_type": self.agent_type,
-            "metadata": metadata
+            "metadata": {"topic": topic, "difficulty": difficulty},
         }
 
-if __name__ == '__main__':
-    # Simple test for QuizAgent stub
-    quiz_agent = QuizAgent()
-    
-    # Test case 1: Start quiz
-    test_user_input_start = "인코텀즈 퀴즈 쉬운 난이도로 시작해줘."
-    test_context_start = {
-        "topic": "Incoterms",
-        "difficulty": "easy"
-    }
-    result_start = quiz_agent.run(test_user_input_start, test_context_start)
-    
-    print("--- Quiz Agent Start Test Result ---")
-    print(f"Response: {result_start['response']}")
-    print(f"Agent Type: {result_start['agent_type']}")
-    print(f"Metadata: ")
-    for key, value in result_start['metadata'].items():
-        if key == "llm_input_prepared":
-            print(f"  {key}:")
-            print(f"    System Prompt (start): {value['system_prompt'][:100]}...")
-            print(f"    User Input: {value['user_input']}")
-            print(f"    Context: {value['context']}")
-        else:
-            print(f"  {key}: {value}")
-    
-    assert result_start['agent_type'] == "quiz"
-    assert "퀴즈가 생성되었습니다" in result_start['response']
-    assert result_start['metadata']['quiz_state'] == "question_generated"
-    assert "System prompt loaded from file" in result_start['response']
-    print("\nQuiz Agent start stub test passed!")
+    def _evaluate_answer(self, quiz_id: str, user_answer: int) -> Dict[str, Any]:
+        """사용자 답안을 채점하고 해설을 반환한다."""
+        quiz_data = _quiz_store.get(quiz_id)
 
-    # Test case 2: Evaluate answer
-    test_user_input_answer = "수출자"
-    test_context_answer = {
-        "question": "FOB에서 운임은 누가 부담합니까?",
-        "choices": ["수출자", "수입자", "포워더", "선사"],
-        "correct_answer": "수출자",
-        "quiz_id": "incoterms_q1"
-    }
-    result_answer = quiz_agent.run(test_user_input_answer, test_context_answer)
+        if not quiz_data:
+            return {
+                "response": {"error": f"퀴즈 ID '{quiz_id}'를 찾을 수 없습니다."},
+                "agent_type": self.agent_type,
+                "metadata": {"quiz_id": quiz_id},
+            }
 
-    print("\n--- Quiz Agent Answer Test Result ---")
-    print(f"Response: {result_answer['response']}")
-    print(f"Agent Type: {result_answer['agent_type']}")
-    print(f"Metadata: ")
-    for key, value in result_answer['metadata'].items():
-        if key == "llm_input_prepared":
-            print(f"  {key}:")
-            print(f"    System Prompt (start): {value['system_prompt'][:100]}...")
-            print(f"    User Input: {value['user_input']}")
-            print(f"    Context: {value['context']}")
-        else:
-            print(f"  {key}: {value}")
-    
-    assert result_answer['agent_type'] == "quiz"
-    assert "답변을 평가했습니다" in result_answer['response']
-    assert result_answer['metadata']['quiz_state'] == "answer_evaluated"
-    assert "정답입니다!" in result_answer['metadata']['explanation']
-    assert "System prompt loaded from file" in result_answer['response']
-    print("\nQuiz Agent answer stub test passed!")
+        correct_answer = quiz_data["answer"]
+        is_correct = user_answer == correct_answer
+
+        return {
+            "response": {
+                "quiz_id": quiz_id,
+                "is_correct": is_correct,
+                "user_answer": user_answer,
+                "correct_answer": correct_answer,
+                "correct_choice": quiz_data["choices"][correct_answer],
+                "explanation": quiz_data["explanation"],
+            },
+            "agent_type": self.agent_type,
+            "metadata": {"quiz_id": quiz_id},
+        }
