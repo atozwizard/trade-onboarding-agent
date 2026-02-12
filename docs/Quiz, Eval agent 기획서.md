@@ -60,40 +60,40 @@
 
 ```mermaid
 sequenceDiagram
-    participant U as 사용자
-    participant R as routes.py
-    participant Q as QuizAgent
-    participant RAG as ChromaDB
-    participant LLM as Upstage Solar
+    participant 사용자
+    participant API서버 as API 서버
+    participant 퀴즈에이전트 as 퀴즈 에이전트
+    participant 벡터DB as 벡터 DB (ChromaDB)
+    participant LLM as LLM (Upstage Solar)
 
-    U->>R: POST /quiz/start {topic, difficulty?}
-    R->>Q: run("퀴즈 생성", {action: "generate", topic, difficulty})
+    사용자->>API서버: 퀴즈 요청 (주제, 난이도)
+    API서버->>퀴즈에이전트: 퀴즈 생성 요청
 
-    Note over Q: ① 필터 구성<br/>topic → document_type<br/>difficulty → level (없으면 생략)
-    Q->>RAG: search_with_filter(query, k=10, **filters)
-    RAG-->>Q: 유사 문서 10건
+    Note over 퀴즈에이전트: ① 필터 구성<br/>주제 → document_type<br/>난이도 → level (없으면 생략)
+    퀴즈에이전트->>벡터DB: 필터 조건으로 유사 문서 검색 (10건)
+    벡터DB-->>퀴즈에이전트: 관련 문서 10건 반환
 
-    Note over Q: ② 검색 결과를 텍스트로 변환<br/>③ quiz_prompt.txt에 삽입<br/>- {reference_data}<br/>- {topic}<br/>- {difficulty_instruction}
-    Q->>LLM: system_prompt + "5문제를 JSON 배열로 출제해주세요"
-    LLM-->>Q: 5문제 JSON 배열
+    Note over 퀴즈에이전트: ② 검색 결과를 텍스트로 변환<br/>③ 프롬프트 템플릿에 삽입<br/>- 참고 데이터<br/>- 주제<br/>- 난이도 지시
+    퀴즈에이전트->>LLM: 프롬프트 전송 → "5문제 출제해주세요"
+    LLM-->>퀴즈에이전트: 5문제 JSON 배열 응답
 
-    Note over Q: ④ JSON 파싱<br/>⑤ 문제별 quiz_id 발급<br/>→ _quiz_store에 저장
-    Q-->>R: [{quiz_id, question, choices, difficulty}, ...]
-    R-->>U: 5문제 반환 (정답/해설 숨김)
+    Note over 퀴즈에이전트: ④ JSON 파싱<br/>⑤ 문제별 고유 ID 발급<br/>→ 메모리에 저장
+    퀴즈에이전트-->>API서버: 5문제 반환
+    API서버-->>사용자: 퀴즈 5문제 (정답/해설 숨김)
 ```
 
 ```mermaid
 sequenceDiagram
-    participant U as 사용자
-    participant R as routes.py
-    participant Q as QuizAgent
+    participant 사용자
+    participant API서버 as API 서버
+    participant 퀴즈에이전트 as 퀴즈 에이전트
 
-    Note over U,Q: 답안 채점 (POST /quiz/answer)
-    U->>R: {quiz_id, answer}
-    R->>Q: run("답변 제출", {action: "evaluate", quiz_id, user_answer})
-    Q->>Q: _quiz_store에서 퀴즈 조회 → 정답 비교
-    Q-->>R: {is_correct, correct_answer, explanation}
-    R-->>U: 정답 여부 + 해설
+    Note over 사용자,퀴즈에이전트: 답안 채점
+    사용자->>API서버: 답안 제출 (퀴즈 ID, 선택 번호)
+    API서버->>퀴즈에이전트: 채점 요청
+    퀴즈에이전트->>퀴즈에이전트: 저장된 퀴즈에서 정답 조회 → 비교
+    퀴즈에이전트-->>API서버: 정답 여부 + 해설
+    API서버-->>사용자: 채점 결과 반환
 ```
 
 ### 2.3 LLM 응답 포맷 (quiz_prompt.txt가 요구하는 형식)
@@ -155,27 +155,27 @@ LLM이 반환한 `is_passed`는 신뢰하지 않고, 서버에서 재계산한�
 
 ```mermaid
 sequenceDiagram
-    participant U as 사용자
-    participant R as routes.py
-    participant E as EvalAgent
-    participant RAG as ChromaDB
-    participant LLM as Upstage Solar
+    participant 사용자
+    participant API서버 as API 서버
+    participant 평가에이전트 as 평가 에이전트
+    participant 벡터DB as 벡터 DB (ChromaDB)
+    participant LLM as LLM (Upstage Solar)
 
-    U->>R: POST /quiz/evaluate {quiz_id, topic}
-    R->>R: _quiz_store[quiz_id]에서 quiz_data 조회
-    R->>E: run("퀴즈 평가", {quiz_data, topic})
+    사용자->>API서버: 평가 요청 (퀴즈 ID, 주제)
+    API서버->>API서버: 저장된 퀴즈 데이터 조회
+    API서버->>평가에이전트: 퀴즈 품질 평가 요청
 
-    Note over E: ① quiz_data["question"]으로 검색
-    E->>RAG: search_with_filter(query=question, k=5)
-    RAG-->>E: 관련 원본 문서 5건
+    Note over 평가에이전트: ① 퀴즈 문제 텍스트로 원본 데이터 검색
+    평가에이전트->>벡터DB: 유사도 기반 문서 검색 (5건)
+    벡터DB-->>평가에이전트: 관련 원본 문서 5건 반환
 
-    Note over E: ② 원본 문서 텍스트 변환<br/>③ eval_prompt.txt에 삽입<br/>- {quiz_data}<br/>- {reference_data}
-    E->>LLM: system_prompt + "엄격하게 평가해주세요" (temp=0.3)
-    LLM-->>E: {grounding_score, educational_score, insight_score, ...}
+    Note over 평가에이전트: ② 원본 문서를 텍스트로 변환<br/>③ 평가 프롬프트에 삽입<br/>- 퀴즈 데이터<br/>- 원본 참고 데이터
+    평가에이전트->>LLM: 프롬프트 전송 → "엄격하게 평가해주세요" (낮은 온도)
+    LLM-->>평가에이전트: 3축 점수 + 피드백 JSON 응답
 
-    Note over E: ④ _validate_eval_result()<br/>점수 0~10 클램핑<br/>is_passed 서버측 재계산<br/>(평균≥80% AND grounding==10)
-    E-->>R: 평가 리포트
-    R-->>U: {scores, is_passed, feedback}
+    Note over 평가에이전트: ④ 점수 보정 (0~10 범위 제한)<br/>통과 판정 서버측 재계산<br/>(평균≥80% AND 사실정확도 만점)
+    평가에이전트-->>API서버: 평가 리포트
+    API서버-->>사용자: 점수 + 통과여부 + 피드백
 ```
 
 ---
