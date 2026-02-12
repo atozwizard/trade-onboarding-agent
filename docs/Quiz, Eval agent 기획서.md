@@ -58,38 +58,42 @@
 
 ### 2.2 퀴즈 생성 파이프라인
 
+```mermaid
+sequenceDiagram
+    participant U as 사용자
+    participant R as routes.py
+    participant Q as QuizAgent
+    participant RAG as ChromaDB
+    participant LLM as Upstage Solar
+
+    U->>R: POST /quiz/start {topic, difficulty?}
+    R->>Q: run("퀴즈 생성", {action: "generate", topic, difficulty})
+
+    Note over Q: ① 필터 구성<br/>topic → document_type<br/>difficulty → level (없으면 생략)
+    Q->>RAG: search_with_filter(query, k=10, **filters)
+    RAG-->>Q: 유사 문서 10건
+
+    Note over Q: ② 검색 결과를 텍스트로 변환<br/>③ quiz_prompt.txt에 삽입<br/>- {reference_data}<br/>- {topic}<br/>- {difficulty_instruction}
+    Q->>LLM: system_prompt + "5문제를 JSON 배열로 출제해주세요"
+    LLM-->>Q: 5문제 JSON 배열
+
+    Note over Q: ④ JSON 파싱<br/>⑤ 문제별 quiz_id 발급<br/>→ _quiz_store에 저장
+    Q-->>R: [{quiz_id, question, choices, difficulty}, ...]
+    R-->>U: 5문제 반환 (정답/해설 숨김)
 ```
-사용자 요청 (topic, difficulty)
-    │
-    ▼
-① TOPIC_FILTER_MAP에서 document_type 필터 조회
-   difficulty가 있으면 DIFFICULTY_LEVEL_MAP에서 level 필터 추가
-    │
-    ▼
-② ChromaDB search_with_filter(query, k=10, **filters)
-   → 유사 문서 10건 검색
-    │
-    ▼
-③ _format_reference_data()
-   → 검색 결과를 "- 내용 (메타데이터)" 텍스트로 변환
-    │
-    ▼
-④ quiz_prompt.txt 템플릿에 플레이스홀더 삽입
-   {reference_data} → 검색 결과 텍스트
-   {topic} → 주제
-   {difficulty_instruction} → "모두 easy 난이도로" 또는 "easy 2, medium 2, hard 1 혼합"
-    │
-    ▼
-⑤ call_llm() → Upstage Solar에 프롬프트 전송
-   → 5문제 JSON 배열 수신
-    │
-    ▼
-⑥ _parse_quiz_json() → JSON 파싱 (코드블록 제거 포함)
-   → 단일 객체도 배열로 감싸기
-    │
-    ▼
-⑦ 각 문제에 quiz_id(8자리 UUID) 발급 → _quiz_store에 저장
-   → 사용자에게는 정답/해설 숨기고 quiz_id + question + choices만 반환
+
+```mermaid
+sequenceDiagram
+    participant U as 사용자
+    participant R as routes.py
+    participant Q as QuizAgent
+
+    Note over U,Q: 답안 채점 (POST /quiz/answer)
+    U->>R: {quiz_id, answer}
+    R->>Q: run("답변 제출", {action: "evaluate", quiz_id, user_answer})
+    Q->>Q: _quiz_store에서 퀴즈 조회 → 정답 비교
+    Q-->>R: {is_correct, correct_answer, explanation}
+    R-->>U: 정답 여부 + 해설
 ```
 
 ### 2.3 LLM 응답 포맷 (quiz_prompt.txt가 요구하는 형식)
@@ -149,83 +153,36 @@ LLM이 반환한 `is_passed`는 신뢰하지 않고, 서버에서 재계산한�
 
 ### 3.4 퀴즈 평가 파이프라인
 
-```
-사용자 요청 (quiz_id, topic)
-    │
-    ▼
-① routes.py에서 _quiz_store[quiz_id] 조회 → quiz_data 확보
-    │
-    ▼
-② quiz_data["question"]을 검색어로 ChromaDB 검색
-   → search_with_filter(query=question, k=5) — 필터 없이 유사도 검색
-   → 퀴즈와 관련된 원본 문서 5건 확보
-    │
-    ▼
-③ _format_reference_data() → 원본 문서를 텍스트로 변환
-    │
-    ▼
-④ eval_prompt.txt 템플릿에 플레이스홀더 삽입
-   {quiz_data} → 퀴즈 JSON 문자열
-   {reference_data} → 원본 문서 텍스트
-    │
-    ▼
-⑤ call_llm(temperature=0.3) → 낮은 온도로 일관된 평가 유도
-   → 평가 결과 JSON 수신
-    │
-    ▼
-⑥ _parse_eval_json() → JSON 파싱
-    │
-    ▼
-⑦ _validate_eval_result() → 점수 0~10 클램핑 + is_passed 서버측 재계산
-   → 평가 리포트 반환
+```mermaid
+sequenceDiagram
+    participant U as 사용자
+    participant R as routes.py
+    participant E as EvalAgent
+    participant RAG as ChromaDB
+    participant LLM as Upstage Solar
+
+    U->>R: POST /quiz/evaluate {quiz_id, topic}
+    R->>R: _quiz_store[quiz_id]에서 quiz_data 조회
+    R->>E: run("퀴즈 평가", {quiz_data, topic})
+
+    Note over E: ① quiz_data["question"]으로 검색
+    E->>RAG: search_with_filter(query=question, k=5)
+    RAG-->>E: 관련 원본 문서 5건
+
+    Note over E: ② 원본 문서 텍스트 변환<br/>③ eval_prompt.txt에 삽입<br/>- {quiz_data}<br/>- {reference_data}
+    E->>LLM: system_prompt + "엄격하게 평가해주세요" (temp=0.3)
+    LLM-->>E: {grounding_score, educational_score, insight_score, ...}
+
+    Note over E: ④ _validate_eval_result()<br/>점수 0~10 클램핑<br/>is_passed 서버측 재계산<br/>(평균≥80% AND grounding==10)
+    E-->>R: 평가 리포트
+    R-->>U: {scores, is_passed, feedback}
 ```
 
 ---
 
-## 4. 생성된 파일 목록
+## 4. 사용 방법 (API 호출)
 
-### 에이전트 코드
-
-| 파일 | 역할 |
-|------|------|
-| `backend/agents/quiz_agent.py` | QuizAgent 클래스 — 퀴즈 생성(RAG+LLM) 및 채점 |
-| `backend/agents/eval_agent.py` | EvalAgent 클래스 — 퀴즈 품질 평가(RAG+LLM) |
-
-### 프롬프트 템플릿
-
-| 파일 | 역할 |
-|------|------|
-| `backend/prompts/quiz_prompt.txt` | 퀴즈 생성용 LLM 프롬프트 (5문제 JSON 배열 출력 지시) |
-| `backend/prompts/eval_prompt.txt` | 퀴즈 평가용 LLM 프롬프트 (3축 채점 + JSON 출력 지시) |
-
-### 공통 유틸리티
-
-| 파일 | 역할 |
-|------|------|
-| `backend/utils/__init__.py` | 패키지 초기화 |
-| `backend/utils/llm.py` | `get_llm()` (캐싱된 LLM 인스턴스) + `call_llm()` (비동기 LLM 호출) |
-
-### API 라우트
-
-| 파일 | 역할 |
-|------|------|
-| `backend/api/routes.py` | 3개 엔드포인트 정의 — `/quiz/start`, `/quiz/answer`, `/quiz/evaluate` |
-
-### RAG 인프라 (기존 유지)
-
-| 파일 | 역할 |
-|------|------|
-| `backend/rag/retriever.py` | `search()`, `search_with_filter()` — ChromaDB 벡터 검색 |
-| `backend/rag/chroma_client.py` | ChromaDB 클라이언트 및 컬렉션 관리 |
-| `backend/rag/embedder.py` | Upstage 임베딩 API 호출 |
-| `backend/rag/ingest.py` | dataset/ JSON → ChromaDB 임베딩 업로드 |
-| `backend/rag/schema.py` | 메타데이터 스키마 정규화 |
-
----
-
-## 5. 사용 방법 (API 호출)
-
-### 5.1 퀴즈 생성
+### 4.1 퀴즈 생성
 
 ```bash
 # 난이도 지정 — 5문제 모두 easy
@@ -261,7 +218,7 @@ curl -X POST http://localhost:8000/api/quiz/start \
 }
 ```
 
-### 5.2 답안 채점
+### 4.2 답안 채점
 
 ```bash
 curl -X POST http://localhost:8000/api/quiz/answer \
@@ -285,7 +242,7 @@ curl -X POST http://localhost:8000/api/quiz/answer \
 }
 ```
 
-### 5.3 퀴즈 품질 평가
+### 4.3 퀴즈 품질 평가
 
 ```bash
 curl -X POST http://localhost:8000/api/quiz/evaluate \
@@ -308,7 +265,7 @@ curl -X POST http://localhost:8000/api/quiz/evaluate \
 }
 ```
 
-### 5.4 코드에서 직접 호출
+### 4.4 코드에서 직접 호출
 
 ```python
 from backend.agents.quiz_agent import QuizAgent
@@ -340,7 +297,7 @@ result = await eval_agent.run("퀴즈 평가", {
 
 ---
 
-## 6. 핵심 로직 요약
+## 5. 핵심 로직 요약
 
 ### 데이터 저장 구조 (`_quiz_store`)
 
@@ -360,22 +317,6 @@ _quiz_store = {
 
 - 서버 메모리에 저장 (서버 재시작 시 초기화)
 - 퀴즈 생성 시 quiz_id별로 개별 저장 → 채점/평가 시 quiz_id로 조회
-
-### 프롬프트 플레이스홀더 치환 흐름
-
-```
-quiz_prompt.txt                         eval_prompt.txt
-┌─────────────────────┐                 ┌─────────────────────┐
-│ {reference_data}    │ ← RAG 검색결과   │ {quiz_data}         │ ← 퀴즈 JSON
-│ {topic}             │ ← 주제          │ {reference_data}    │ ← RAG 검색결과
-│ {difficulty_instruction} │ ← 난이도지시 └─────────────────────┘
-└─────────────────────┘
-         ↓                                        ↓
-    call_llm()                               call_llm()
-    temperature=0.7                          temperature=0.3
-         ↓                                        ↓
-   5문제 JSON 배열                          평가 JSON 객체
-```
 
 ### LLM temperature 사용 전략
 
