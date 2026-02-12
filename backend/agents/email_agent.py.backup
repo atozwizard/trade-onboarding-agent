@@ -9,17 +9,23 @@ Phase 1 구현: 기본 골격 + 모드 감지 + 더미 응답
 Phase 2 구현: RAG 연동 (검색 결과 포함)
 Phase 3 구현: LLM 연동 (Draft Mode 완성)
 """
-import logging
-import json
-import re
 from typing import Dict, List, Literal, Optional
+import sys
+import os
+import re
 
-from backend.agents.base import BaseAgent, AgentResponse
-from backend.ports import LLMGateway, DocumentRetriever
+# 프로젝트 루트를 Python path에 추가
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
 from backend.prompts.email_prompt import load_all_prompts
+from backend.rag.retriever import search, search_with_filter
+from backend.config import get_settings
+
+# LangChain imports
+from langchain_upstage import ChatUpstage
 
 
-class EmailCoachAgent(BaseAgent):
+class EmailCoachAgent:
     """
     이메일 코칭 에이전트
 
@@ -27,21 +33,29 @@ class EmailCoachAgent(BaseAgent):
         prompts: 로딩된 프롬프트 템플릿들
     """
 
-    def __init__(self, llm: LLMGateway, retriever: DocumentRetriever):
+    def __init__(self):
         """
         에이전트 초기화
-
-        Args:
-            llm: LLM Gateway (Upstage Solar 등)
-            retriever: Document Retriever (ChromaDB 등)
+        - 프롬프트 로딩
+        - LLM 초기화
         """
-        self._llm = llm
-        self._retriever = retriever
+        # 프롬프트 로딩
         self.prompts = load_all_prompts()
-        self._logger = logging.getLogger(__name__)
-        self._logger.info("Email Coach Agent initialized")
 
-    def run(self, user_input: str, context: Dict) -> AgentResponse:
+        # 설정 로딩
+        settings = get_settings()
+
+        # LLM 초기화 (Phase 3)
+        self.llm = ChatUpstage(
+            api_key=settings.upstage_api_key,
+            model="solar-pro"
+        )
+
+        print("✅ Email Coach Agent initialized")
+        print(f"   - Prompts loaded: {len(self.prompts)}")
+        print(f"   - LLM model: solar-pro")
+
+    def run(self, user_input: str, context: Dict) -> Dict:
         """
         BaseAgent 인터페이스 구현
 
@@ -61,22 +75,24 @@ class EmailCoachAgent(BaseAgent):
                 }
 
         Returns:
-            AgentResponse with:
-                - response: str (마크다운 형식 응답)
-                - agent_type: "email"
-                - metadata: {
+            {
+                "response": str,              # 마크다운 형식 응답
+                "agent_type": "email",
+                "metadata": {
                     "mode": "draft" | "review",
                     "risks": List[Dict],      # Review 모드일 경우
                     "tone_score": float,      # Review 모드일 경우
                     "sources": List[str]      # RAG 검색 결과 출처
                 }
+            }
         """
-        self._logger.info(f"Email Coach Agent Running with input: {user_input[:50]}...")
-        self._logger.debug(f"Context: {context}")
+        print(f"\n🔵 Email Coach Agent Running...")
+        print(f"   User input: {user_input[:50]}...")
+        print(f"   Context: {context}")
 
         # 1. 모드 자동 감지
         mode = self._detect_mode(user_input, context)
-        self._logger.info(f"Detected mode: {mode}")
+        print(f"   Detected mode: {mode}")
 
         # 2. 모드별 라우팅
         if mode == "draft":
@@ -129,7 +145,7 @@ class EmailCoachAgent(BaseAgent):
         # Rule 5: Default
         return "draft"
 
-    def _draft_mode(self, user_input: str, context: Dict) -> AgentResponse:
+    def _draft_mode(self, user_input: str, context: Dict) -> Dict:
         """
         Draft Mode: 이메일 초안 작성
 
@@ -142,16 +158,16 @@ class EmailCoachAgent(BaseAgent):
             context: 상황, 수신자 국가 등
 
         Returns:
-            AgentResponse
+            응답 딕셔너리
         """
-        self._logger.info("Draft Mode activated")
+        print(f"   🟢 Draft Mode activated")
 
         situation = context.get("situation", "")
         recipient_country = context.get("recipient_country", "")
         relationship = context.get("relationship", "")
 
         # Phase 2: RAG 검색 - 우수 이메일 사례
-        self._logger.info("Searching for email templates...")
+        print(f"   🔍 Searching for email templates...")
 
         # 검색 쿼리 구성
         search_query = f"{user_input}"
@@ -160,21 +176,21 @@ class EmailCoachAgent(BaseAgent):
 
         # RAG 검색 실행
         try:
-            retrieved_docs = self._retriever.search(
+            retrieved_emails = search_with_filter(
                 query=search_query,
                 k=3,
                 document_type="email"
             )
-            self._logger.info(f"Found {len(retrieved_docs)} email templates")
+            print(f"   ✅ Found {len(retrieved_emails)} email templates")
         except Exception as e:
-            self._logger.warning(f"RAG search failed: {e}")
-            retrieved_docs = []
+            print(f"   ⚠️ RAG search failed: {e}")
+            retrieved_emails = []
 
         # 검색 결과 포맷팅 (프롬프트용)
-        formatted_emails_for_prompt = self._format_retrieved_docs_for_prompt(retrieved_docs)
+        formatted_emails_for_prompt = self._format_retrieved_docs_for_prompt(retrieved_emails)
 
         # Phase 3: LLM 프롬프트 구성
-        self._logger.info("Generating email with LLM...")
+        print(f"   🤖 Generating email with LLM...")
 
         prompt = self.prompts["draft"].format(
             user_input=user_input,
@@ -186,10 +202,11 @@ class EmailCoachAgent(BaseAgent):
 
         # LLM 호출
         try:
-            generated_email = self._llm.invoke(prompt)
-            self._logger.info(f"Email generated ({len(generated_email)} characters)")
+            response = self.llm.invoke(prompt)
+            generated_email = response.content.strip()
+            print(f"   ✅ Email generated ({len(generated_email)} characters)")
         except Exception as e:
-            self._logger.error(f"LLM error: {e}")
+            print(f"   ❌ LLM error: {e}")
             generated_email = f"""[LLM 호출 실패: {str(e)}]
 
 Dear [Buyer Name],
@@ -205,7 +222,7 @@ Best regards,
         checklist = self._generate_checklist(generated_email)
 
         # 출처 추출
-        sources = [doc.metadata.get("source_dataset", "unknown") for doc in retrieved_docs]
+        sources = [doc["metadata"].get("source_dataset", "unknown") for doc in retrieved_emails]
 
         # 최종 응답 포맷팅
         response_text = f"""### 📧 작성된 이메일 초안
@@ -221,9 +238,9 @@ Best regards,
 
 ---
 
-### 📚 참고한 이메일 샘플 ({len(retrieved_docs)}개)
+### 📚 참고한 이메일 샘플 ({len(retrieved_emails)}개)
 
-{self._format_retrieved_docs(retrieved_docs)[:500]}{"..." if len(self._format_retrieved_docs(retrieved_docs)) > 500 else ""}
+{self._format_retrieved_docs(retrieved_emails)[:500]}{"..." if len(self._format_retrieved_docs(retrieved_emails)) > 500 else ""}
 
 ---
 
@@ -232,19 +249,19 @@ Best regards,
 **✅ Phase 3 완료**: RAG 기반 실제 이메일이 생성되었습니다. 즉시 전송 가능합니다!
 """
 
-        return AgentResponse(
-            response=response_text,
-            agent_type="email",
-            metadata={
+        return {
+            "response": response_text,
+            "agent_type": "email",
+            "metadata": {
                 "mode": "draft",
                 "sources": sources,
-                "retrieved_count": len(retrieved_docs),
+                "retrieved_count": len(retrieved_emails),
                 "email_length": len(generated_email),
                 "phase": 3  # Phase 3 완료
             }
-        )
+        }
 
-    def _review_mode(self, user_input: str, context: Dict) -> AgentResponse:
+    def _review_mode(self, user_input: str, context: Dict) -> Dict:
         """
         Review Mode: 이메일 검토 + 리스크 탐지
 
@@ -258,9 +275,9 @@ Best regards,
             context: 이메일 내용, 수신자 국가 등
 
         Returns:
-            AgentResponse
+            응답 딕셔너리
         """
-        self._logger.info("Review Mode activated")
+        print(f"   🔴 Review Mode activated")
 
         # 이메일 내용 추출
         email_content = context.get("email_content", "")
@@ -269,52 +286,52 @@ Best regards,
             email_content = self._extract_email_from_input(user_input)
 
         if not email_content:
-            return AgentResponse(
-                response="❌ **오류**: 검토할 이메일 내용이 없습니다.\n\n`context['email_content']`에 이메일을 입력해주세요.",
-                agent_type="email",
-                metadata={
+            return {
+                "response": "❌ **오류**: 검토할 이메일 내용이 없습니다.\n\n`context['email_content']`에 이메일을 입력해주세요.",
+                "agent_type": "email",
+                "metadata": {
                     "mode": "review",
                     "error": "missing_email_content"
                 }
-            )
+            }
 
         # Phase 2: RAG 검색 - 실수 사례
-        self._logger.info("Searching for mistake cases...")
+        print(f"   🔍 Searching for mistake cases...")
 
         try:
             # 실수 사례 검색 (mistakes.json)
-            retrieved_mistakes = self._retriever.search(
+            retrieved_mistakes = search_with_filter(
                 query=email_content,
                 k=5,
                 document_type="common_mistake"
             )
-            self._logger.info(f"Found {len(retrieved_mistakes)} mistake cases")
+            print(f"   ✅ Found {len(retrieved_mistakes)} mistake cases")
 
             # 우수 이메일 사례도 참고용으로 검색
-            retrieved_emails = self._retriever.search(
+            retrieved_emails = search_with_filter(
                 query=email_content,
                 k=2,
                 document_type="email"
             )
-            self._logger.info(f"Found {len(retrieved_emails)} email templates (reference)")
+            print(f"   ✅ Found {len(retrieved_emails)} email templates (reference)")
 
         except Exception as e:
-            self._logger.warning(f"RAG search failed: {e}")
+            print(f"   ⚠️ RAG search failed: {e}")
             retrieved_mistakes = []
             retrieved_emails = []
 
         # Phase 4: 리스크 탐지
-        self._logger.info("Analyzing risks with LLM...")
+        print(f"   🤖 Analyzing risks with LLM...")
         risks = self._detect_risks(email_content, retrieved_mistakes, context)
-        self._logger.info(f"Detected {len(risks)} risks")
+        print(f"   ✅ Detected {len(risks)} risks")
 
         # Phase 5: 톤 분석
-        self._logger.info("Analyzing tone...")
+        print(f"   🎨 Analyzing tone...")
         tone_analysis = self._analyze_tone(email_content, retrieved_emails, context)
-        self._logger.info(f"Tone score: {tone_analysis.get('score', 0)}/10")
+        print(f"   ✅ Tone score: {tone_analysis.get('score', 0)}/10")
 
         # Phase 5: 완전한 수정안 생성 (LLM)
-        self._logger.info("Generating complete improvement...")
+        print(f"   ✏️ Generating complete improvement...")
         improved_email = self._generate_improvement_complete(
             email_content,
             risks,
@@ -328,9 +345,9 @@ Best regards,
         # 출처 추출
         sources = []
         for doc in retrieved_mistakes:
-            sources.append(doc.metadata.get("source_dataset", "unknown"))
+            sources.append(doc["metadata"].get("source_dataset", "unknown"))
         for doc in retrieved_emails:
-            sources.append(doc.metadata.get("source_dataset", "unknown"))
+            sources.append(doc["metadata"].get("source_dataset", "unknown"))
 
         # Phase 5: 리스크 + 톤 분석 포함된 최종 응답
         response_text = f"""### 🚨 발견된 리스크 ({len(risks)}건)
@@ -380,10 +397,10 @@ Best regards,
 **✅ Phase 5 완료**: 리스크 탐지, 톤 분석, 완전한 수정안이 생성되었습니다!
 """
 
-        return AgentResponse(
-            response=response_text,
-            agent_type="email",
-            metadata={
+        return {
+            "response": response_text,
+            "agent_type": "email",
+            "metadata": {
                 "mode": "review",
                 "risks": risks,
                 "risk_count": len(risks),
@@ -394,14 +411,14 @@ Best regards,
                 "retrieved_emails": len(retrieved_emails),
                 "phase": 5  # Phase 5 완료
             }
-        )
+        }
 
     # ========== Helper Methods ==========
 
     def _detect_risks(
         self,
         email_content: str,
-        retrieved_mistakes: List,
+        retrieved_mistakes: List[Dict],
         context: Dict
     ) -> List[Dict]:
         """
@@ -436,8 +453,8 @@ Best regards,
 
         # LLM 호출
         try:
-            response = self._llm.invoke(prompt)
-            risks = self._parse_risks_response(response)
+            response = self.llm.invoke(prompt)
+            risks = self._parse_risks_response(response.content)
 
             # 심각도 순 정렬 (critical > high > medium)
             severity_order = {"critical": 1, "high": 2, "medium": 3, "low": 4}
@@ -446,7 +463,7 @@ Best regards,
             return risks[:5]  # 최대 5개
 
         except Exception as e:
-            self._logger.warning(f"Risk detection error: {e}")
+            print(f"   ⚠️ Risk detection error: {e}")
             # 폴백: 기본 리스크 체크
             return self._basic_risk_check(email_content)
 
@@ -460,6 +477,8 @@ Best regards,
         Returns:
             파싱된 리스크 리스트
         """
+        import json
+
         # JSON 블록 추출 시도
         json_match = re.search(r'```json\n(.*?)\n```', response, re.DOTALL)
         if json_match:
@@ -477,11 +496,11 @@ Best regards,
             elif isinstance(parsed, dict) and "risks" in parsed:
                 return parsed["risks"]
             else:
-                self._logger.warning("Unexpected JSON format")
+                print(f"   ⚠️ Unexpected JSON format")
                 return []
 
         except json.JSONDecodeError as e:
-            self._logger.warning(f"JSON parsing failed: {e}")
+            print(f"   ⚠️ JSON parsing failed: {e}")
             # 폴백: 텍스트 파싱 시도
             return self._parse_risks_from_text(response)
 
@@ -574,7 +593,7 @@ Best regards,
     def _analyze_tone(
         self,
         email_content: str,
-        retrieved_emails: List,
+        retrieved_emails: List[Dict],
         context: Dict
     ) -> Dict:
         """
@@ -609,12 +628,12 @@ Best regards,
 
         # LLM 호출
         try:
-            response = self._llm.invoke(prompt)
-            tone_result = self._parse_tone_response(response)
+            response = self.llm.invoke(prompt)
+            tone_result = self._parse_tone_response(response.content)
             return tone_result
 
         except Exception as e:
-            self._logger.warning(f"Tone analysis error: {e}")
+            print(f"   ⚠️ Tone analysis error: {e}")
             # 폴백: 기본 톤 분석
             return {
                 "current_tone": "unknown",
@@ -635,6 +654,8 @@ Best regards,
         Returns:
             파싱된 톤 분석 결과
         """
+        import json
+
         # JSON 블록 추출
         json_match = re.search(r'```json\n(.*?)\n```', response, re.DOTALL)
         if json_match:
@@ -656,7 +677,7 @@ Best regards,
             }
 
         except (json.JSONDecodeError, ValueError) as e:
-            self._logger.warning(f"Tone JSON parsing failed: {e}")
+            print(f"   ⚠️ Tone JSON parsing failed: {e}")
             # 폴백: 텍스트에서 추출
             return {
                 "current_tone": "unknown",
@@ -672,7 +693,7 @@ Best regards,
         email_content: str,
         risks: List[Dict],
         tone_analysis: Dict,
-        retrieved_emails: List
+        retrieved_emails: List[Dict]
     ) -> str:
         """
         완전한 수정안 생성 (LLM 사용)
@@ -693,19 +714,38 @@ Best regards,
         formatted_risks = self._format_risks(risks)
         formatted_emails = self._format_retrieved_docs_for_prompt(retrieved_emails)
 
-        prompt = self.prompts["improvement"].format(
-            email_content=email_content,
-            risks=formatted_risks,
-            current_tone=tone_analysis.get('current_tone', 'unknown'),
-            recommended_tone=tone_analysis.get('recommended_tone', 'professional'),
-            tone_score=tone_analysis.get('score', 0),
-            tone_issues=', '.join(tone_analysis.get('issues', [])[:3]),
-            retrieved_emails=formatted_emails
-        )
+        prompt = f"""당신은 15년차 무역 전문가입니다.
+다음 이메일을 리스크와 톤 분석 결과를 반영하여 완전히 개선하세요.
+
+[원본 이메일]
+{email_content}
+
+[탐지된 리스크]
+{formatted_risks}
+
+[톤 분석]
+- 현재 톤: {tone_analysis.get('current_tone', 'unknown')}
+- 권장 톤: {tone_analysis.get('recommended_tone', 'professional')}
+- 점수: {tone_analysis.get('score', 0)}/10
+- 문제점: {', '.join(tone_analysis.get('issues', [])[:3])}
+
+[참고 우수 이메일]
+{formatted_emails}
+
+[출력 형식]
+- 개선된 이메일 전문만 출력 (설명 불필요)
+- 형식: 실제 전송 가능한 완성된 이메일
+- 모든 리스크 해결
+- 권장 톤으로 조정
+- 5W1H 포함
+
+개선된 이메일:
+"""
 
         # LLM 호출
         try:
-            improved = self._llm.invoke(prompt)
+            response = self.llm.invoke(prompt)
+            improved = response.content.strip()
 
             # "개선된 이메일:" 같은 접두어 제거
             if improved.startswith("개선된 이메일:"):
@@ -714,7 +754,7 @@ Best regards,
             return improved
 
         except Exception as e:
-            self._logger.warning(f"Improvement generation error: {e}")
+            print(f"   ⚠️ Improvement generation error: {e}")
             # 폴백: 간단한 수정안
             return self._generate_improvement_simple(email_content, risks, retrieved_emails)
 
@@ -722,7 +762,7 @@ Best regards,
         self,
         email_content: str,
         risks: List[Dict],
-        retrieved_emails: List
+        retrieved_emails: List[Dict]
     ) -> str:
         """
         리스크 기반 간단한 수정안 생성 (폴백용)
@@ -836,12 +876,12 @@ Best regards,
 
         return "\n".join(improvements) if improvements else "✅ 개선 필요 사항 없음"
 
-    def _format_retrieved_docs_for_prompt(self, docs: List) -> str:
+    def _format_retrieved_docs_for_prompt(self, docs: List[Dict]) -> str:
         """
         RAG 검색 결과를 LLM 프롬프트용으로 포맷
 
         Args:
-            docs: retriever 검색 결과 (RetrievedDocument 객체 리스트)
+            docs: retriever 검색 결과
 
         Returns:
             프롬프트에 주입할 문자열
@@ -851,8 +891,8 @@ Best regards,
 
         formatted = []
         for i, doc in enumerate(docs, 1):
-            content = doc.content
-            metadata = doc.metadata
+            content = doc.get("document", "N/A")
+            metadata = doc.get("metadata", {})
 
             formatted.append(f"""[샘플 {i}]
 내용: {content}
@@ -917,12 +957,20 @@ Best regards,
 
         return "\n".join(checklist_lines)
 
-    def _format_retrieved_docs(self, docs: List) -> str:
+    def _format_retrieved_docs(self, docs: List[Dict]) -> str:
         """
         RAG 검색 결과를 읽기 쉬운 형식으로 포맷
 
         Args:
-            docs: retriever.search() 결과 (RetrievedDocument 객체 리스트)
+            docs: retriever.search_with_filter() 결과
+                [
+                    {
+                        "document": str,
+                        "metadata": dict,
+                        "distance": float
+                    },
+                    ...
+                ]
 
         Returns:
             포맷된 문자열 (마크다운)
@@ -932,9 +980,9 @@ Best regards,
 
         formatted = []
         for i, doc in enumerate(docs, 1):
-            content = doc.content
-            metadata = doc.metadata
-            distance = doc.distance
+            content = doc.get("document", "N/A")
+            metadata = doc.get("metadata", {})
+            distance = doc.get("distance", 0.0)
 
             # 신뢰도 표시 (distance가 낮을수록 유사도 높음)
             if distance < 0.5:
@@ -994,3 +1042,97 @@ Best regards,
         unique_sources = list(set(sources))
 
         return ", ".join(unique_sources[:3])  # 최대 3개만 표시
+
+
+# ========== 테스트 코드 ==========
+
+if __name__ == '__main__':
+    print("=== Email Coach Agent Test (Phase 4 - Risk Detection) ===\n")
+
+    # 에이전트 초기화
+    agent = EmailCoachAgent()
+
+    print("\n" + "="*60)
+    print("Test 1: Review Mode - 리스크 많은 이메일")
+    print("="*60)
+
+    result1 = agent.run(
+        user_input="다음 이메일 검토해줘",
+        context={
+            "mode": "review",
+            "email_content": """Hi,
+
+Send me the quotation. We will pay later.
+
+Thanks."""
+        }
+    )
+
+    print("\n[Result]")
+    print(f"Agent Type: {result1['agent_type']}")
+    print(f"Mode: {result1['metadata']['mode']}")
+    print(f"Phase: {result1['metadata']['phase']}")
+    print(f"Risks detected: {result1['metadata']['risk_count']}")
+    print(f"\n{result1['response'][:1000]}...")
+
+    print("\n" + "="*60)
+    print("Test 2: Review Mode - 공격적 톤 이메일")
+    print("="*60)
+
+    result2 = agent.run(
+        user_input="이메일 검토",
+        context={
+            "email_content": """I need the documents by tomorrow. You must send them immediately or we will cancel the order.
+
+Send confirmation ASAP."""
+        }
+    )
+
+    print("\n[Result]")
+    print(f"Risks detected: {result2['metadata']['risk_count']}")
+    print(f"Sources: {result2['metadata']['sources'][:3]}")
+    print(f"\n{result2['response'][:1000]}...")
+
+    print("\n" + "="*60)
+    print("Test 3: Review Mode - 좋은 이메일 (리스크 적음)")
+    print("="*60)
+
+    result3 = agent.run(
+        user_input="다음 이메일 검토해줘: Dear Mr. Smith, Could you please provide a quotation for 1,000 units? Incoterms: FOB Shanghai. Payment: T/T 30/70. Best regards,",
+        context={}
+    )
+
+    print("\n[Result]")
+    print(f"Risks detected: {result3['metadata']['risk_count']}")
+
+    print("\n" + "="*60)
+    print("Test 4: Draft Mode - 빠른 테스트 (Phase 3 확인)")
+    print("="*60)
+
+    result4 = agent.run(
+        user_input="견적 요청 이메일 작성",
+        context={
+            "situation": "quotation_request"
+        }
+    )
+
+    print("\n[Result]")
+    print(f"Mode: {result4['metadata']['mode']}")
+    print(f"Email generated: {result4['metadata']['email_length']} chars")
+
+    print("\n" + "="*60)
+    print("✅ Phase 4 테스트 완료!")
+    print("="*60)
+
+    print("\n📊 Phase 4 완료도:")
+    print("  ✅ Review Mode 완성")
+    print("  ✅ 실수 사례 기반 리스크 탐지")
+    print("  ✅ LLM으로 리스크 분석")
+    print("  ✅ JSON 파싱 (+ 폴백)")
+    print("  ✅ 구체적인 수정안 제시")
+
+    print("\n🚨 리스크 탐지 샘플:")
+    print(result1['response'][:1200])
+    print("\n...")
+
+    print("\n다음 단계: Phase 5 (Tone Analysis + 완전한 수정안) 또는 Phase 6 (API 연동)")
