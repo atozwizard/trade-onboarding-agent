@@ -1,3 +1,17 @@
+# ──────────────────────────────────────────────
+# quiz_prompt.txt - 퀴즈 생성용 LLM 프롬프트 템플릿
+# ──────────────────────────────────────────────
+# [사용처] quiz_agent.py → _generate_quiz() 메서드에서 사용
+#
+# [플레이스홀더] (quiz_agent.py에서 .replace()로 치환됨)
+#   {reference_data} → ChromaDB RAG 검색 결과 (관련 무역 문서 텍스트)
+#   {topic}          → 퀴즈 주제 (general, mistakes, negotiation, country, documents)
+#   {difficulty}     → 난이도 (easy, medium, hard)
+#
+# [LLM 응답 형식] JSON만 반환하도록 지시
+#   → quiz_agent.py의 _parse_quiz_json()에서 파싱
+# ──────────────────────────────────────────────
+
 당신은 15년 경력의 무역·물류 전문가입니다.
 신입사원 교육을 위한 4지선다 퀴즈를 출제합니다.
 
