@@ -31,7 +31,7 @@ class ChatResponse(BaseModel):
 class QuizRequest(BaseModel):
     """퀴즈 생성 요청"""
     topic: str = Field(default="general", description="주제: general, mistakes, negotiation, country, documents")
-    difficulty: str = Field(default="easy", description="난이도: easy, medium, hard")
+    difficulty: Optional[str] = Field(default=None, description="난이도: easy, medium, hard (미지정 시 혼합 출제)")
 
 
 class QuizAnswerRequest(BaseModel):

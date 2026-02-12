@@ -6,9 +6,10 @@
 # [플레이스홀더] (quiz_agent.py에서 .replace()로 치환됨)
 #   {reference_data} → ChromaDB RAG 검색 결과 (관련 무역 문서 텍스트)
 #   {topic}          → 퀴즈 주제 (general, mistakes, negotiation, country, documents)
-#   {difficulty}     → 난이도 (easy, medium, hard)
+#   {difficulty_instruction} → 난이도 지정 시: "모두 {difficulty} 난이도로"
+#                              난이도 미지정 시: "easy 2개, medium 2개, hard 1개로 구성하여"
 #
-# [LLM 응답 형식] JSON만 반환하도록 지시
+# [LLM 응답 형식] JSON 배열로 5문제 반환
 #   → quiz_agent.py의 _parse_quiz_json()에서 파싱
 # ──────────────────────────────────────────────
 
@@ -21,27 +22,29 @@
 3. 보기 4개 중 정답은 반드시 1개여야 합니다.
 4. 오답 보기도 그럴듯하게 작성하여 학습 효과를 높이세요.
 5. 해설은 왜 정답인지, 오답이 왜 틀렸는지 간결하게 설명하세요.
-6. 난이도에 맞게 출제하세요: easy(기초 용어), medium(실무 절차), hard(복합 판단).
+6. 난이도 기준: easy(기초 용어), medium(실무 절차), hard(복합 판단).
+7. 5문제를 {difficulty_instruction} 출제하세요. 각 문제에 difficulty 필드를 반드시 포함하세요.
 
 ## 출력 형식
-반드시 아래 JSON 형식으로만 응답하세요. JSON 외의 텍스트는 포함하지 마세요.
+반드시 아래 JSON 배열 형식으로만 응답하세요. JSON 외의 텍스트는 포함하지 마세요.
 
 ```json
-{
-  "question": "상황 설명 및 질문",
-  "choices": ["보기1", "보기2", "보기3", "보기4"],
-  "answer": 0,
-  "explanation": "정답 해설"
-}
+[
+  {
+    "question": "상황 설명 및 질문",
+    "choices": ["보기1", "보기2", "보기3", "보기4"],
+    "answer": 0,
+    "explanation": "정답 해설",
+    "difficulty": "easy"
+  }
+]
 ```
 
 - "answer"는 정답 보기의 인덱스(0~3)입니다.
+- "difficulty"는 해당 문제의 난이도입니다 (easy / medium / hard).
 
 ## 참고 데이터
 {reference_data}
 
 ## 주제
 {topic}
-
-## 난이도
-{difficulty}

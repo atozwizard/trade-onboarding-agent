@@ -3,17 +3,21 @@
 
 [전체 흐름]
   사용자 요청 → routes.py → QuizAgent.run()
-    ├─ action="generate" → RAG 검색 → LLM 퀴즈 생성 → 저장 후 반환
+    ├─ action="generate" → RAG 검색 → LLM이 5문제 생성 → 개별 quiz_id 발급 후 반환
     └─ action="evaluate" → 저장된 퀴즈에서 정답 비교 → 결과 반환
 
+[난이도 처리]
+  - difficulty 지정 시: 5문제 모두 해당 난이도로 생성
+  - difficulty 미지정 시: easy 2개, medium 2개, hard 1개 혼합 구성
+
 [이전 방식과 차이]
-  - 이전: dataset/ 폴더의 JSON 파일을 직접 읽어서 퀴즈 소스로 사용
-  - 현재: ChromaDB 벡터 DB에서 RAG 검색으로 관련 데이터를 가져와 퀴즈 소스로 사용
+  - 이전: dataset/ 폴더의 JSON 파일을 직접 읽어서 퀴즈 소스로 사용, 1문제씩 생성
+  - 현재: ChromaDB 벡터 DB에서 RAG 검색, LLM 1회 호출로 5문제 배열 생성
 """
 import json
 import uuid
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 # call_llm: Upstage Solar LLM에 프롬프트를 보내고 응답 텍스트를 받는 함수
 from backend.utils.llm import call_llm
@@ -50,7 +54,7 @@ DIFFICULTY_LEVEL_MAP: Dict[str, str] = {
 }
 
 # 생성된 퀴즈를 메모리에 임시 저장하는 딕셔너리
-# key: quiz_id (8자리 UUID), value: 퀴즈 데이터 (question, choices, answer, explanation)
+# key: quiz_id (8자리 UUID), value: 퀴즈 데이터 (question, choices, answer, explanation, difficulty)
 # 서버가 재시작되면 초기화됨 (영구 저장이 아님)
 _quiz_store: Dict[str, Dict[str, Any]] = {}
 
@@ -61,7 +65,7 @@ _quiz_store: Dict[str, Dict[str, Any]] = {}
 
 def _load_prompt(filename: str) -> str:
     """프롬프트 템플릿 파일(.txt)을 읽어서 문자열로 반환한다.
-    반환된 문자열에는 {reference_data}, {topic}, {difficulty} 같은
+    반환된 문자열에는 {reference_data}, {topic}, {difficulty_instruction} 같은
     플레이스홀더가 포함되어 있고, 나중에 .replace()로 실제 값을 채운다.
     """
     prompt_path = os.path.join(PROMPTS_DIR, filename)
@@ -69,15 +73,15 @@ def _load_prompt(filename: str) -> str:
         return f.read()
 
 
-def _parse_quiz_json(raw: str) -> Dict[str, Any]:
-    """LLM이 반환한 텍스트에서 JSON을 추출하여 파싱한다.
+def _parse_quiz_json(raw: str) -> List[Dict[str, Any]]:
+    """LLM이 반환한 텍스트에서 JSON 배열을 추출하여 파싱한다.
     LLM이 ```json ... ``` 코드블록으로 감쌀 수 있으므로 이를 제거한 후 파싱한다.
 
     예시 입력:
         ```json
-        {"question": "...", "choices": [...], "answer": 0, "explanation": "..."}
+        [{"question": "...", "choices": [...], "answer": 0, ...}, ...]
         ```
-    → {"question": "...", "choices": [...], "answer": 0, "explanation": "..."} (dict)
+    → [{"question": "...", ...}, ...] (list of dict)
     """
     text = raw.strip()
     # ```json 또는 ``` 으로 시작하는 줄 제거
@@ -85,7 +89,11 @@ def _parse_quiz_json(raw: str) -> Dict[str, Any]:
         lines = text.split("\n")
         lines = [l for l in lines if not l.strip().startswith("```")]
         text = "\n".join(lines)
-    return json.loads(text)
+    parsed = json.loads(text)
+    # 혹시 LLM이 단일 객체로 반환하면 배열로 감싼다
+    if isinstance(parsed, dict):
+        parsed = [parsed]
+    return parsed
 
 
 def _format_reference_data(docs: list) -> str:
@@ -123,7 +131,12 @@ class QuizAgent:
 
     routes.py에서 싱글톤으로 생성되어 사용된다:
         quiz_agent = QuizAgent()
+
+        # 난이도 지정: 5문제 모두 easy
         result = await quiz_agent.run("퀴즈 생성", {"action": "generate", "topic": "general", "difficulty": "easy"})
+
+        # 난이도 미지정: easy 2 + medium 2 + hard 1 혼합
+        result = await quiz_agent.run("퀴즈 생성", {"action": "generate", "topic": "general"})
     """
 
     agent_type: str = "quiz"
@@ -135,14 +148,14 @@ class QuizAgent:
     async def run(self, user_input: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """에이전트 진입점. context["action"] 값에 따라 분기한다.
 
-        - "generate": 새 퀴즈를 생성 (RAG + LLM)
+        - "generate": 새 퀴즈 5문제를 생성 (RAG + LLM)
         - "evaluate": 이미 생성된 퀴즈에 대해 사용자 답안을 채점
         """
         action = context.get("action", "generate")
 
         if action == "generate":
             topic = context.get("topic", "general")
-            difficulty = context.get("difficulty", "easy")
+            difficulty = context.get("difficulty")  # None이면 혼합 난이도
             return await self._generate_quiz(topic, difficulty)
         elif action == "evaluate":
             quiz_id = context.get("quiz_id", "")
@@ -155,52 +168,64 @@ class QuizAgent:
                 "metadata": {},
             }
 
-    async def _generate_quiz(self, topic: str, difficulty: str) -> Dict[str, Any]:
-        """RAG 검색 → 프롬프트 조립 → LLM 호출 → JSON 파싱 → 저장 순서로 퀴즈를 생성한다.
+    async def _generate_quiz(self, topic: str, difficulty: Optional[str] = None) -> Dict[str, Any]:
+        """RAG 검색 → 프롬프트 조립 → LLM 호출 → JSON 파싱 → 저장 순서로 퀴즈 5문제를 생성한다.
 
         전체 파이프라인:
-            1) topic/difficulty → ChromaDB 필터 조건 구성
-            2) ChromaDB에서 유사 문서 5개 검색
+            1) topic → ChromaDB 필터 조건 구성 (difficulty 있으면 level 필터 추가)
+            2) ChromaDB에서 유사 문서 검색
             3) 검색 결과를 텍스트로 변환
-            4) quiz_prompt.txt 템플릿에 검색 결과 + topic + difficulty 삽입
-            5) LLM에 프롬프트 전송 → 퀴즈 JSON 응답 수신
-            6) JSON 파싱 후 quiz_id 발급, 메모리에 저장
+            4) quiz_prompt.txt 템플릿에 검색 결과 + topic + difficulty_instruction 삽입
+            5) LLM에 프롬프트 전송 → 5문제 JSON 배열 수신
+            6) 각 문제에 quiz_id 발급, 메모리에 저장
+
+        Args:
+            topic: 퀴즈 주제 (general, mistakes, negotiation, country, documents)
+            difficulty: 난이도 (easy, medium, hard). None이면 혼합 구성
         """
         # 1) RAG 필터 구성
         #    예: topic="mistakes", difficulty="easy"
         #    → filters = {"document_type": "common_mistake", "level": "beginner"}
+        #    difficulty=None이면 level 필터 없이 전체 레벨에서 검색
         filters = TOPIC_FILTER_MAP.get(topic, {}).copy()
-        level = DIFFICULTY_LEVEL_MAP.get(difficulty, "beginner")
-        filters["level"] = level
+        if difficulty:
+            level = DIFFICULTY_LEVEL_MAP.get(difficulty, "beginner")
+            filters["level"] = level
 
-        # 2) ChromaDB에서 필터 조건에 맞는 유사 문서 5개 검색
-        query = f"{topic} 무역 퀴즈 {difficulty}"
-        docs = search_with_filter(query=query, k=5, **filters)
+        # 2) ChromaDB에서 필터 조건에 맞는 유사 문서 검색
+        #    5문제 생성에 충분한 참고 자료를 확보하기 위해 k=10
+        query = f"{topic} 무역 퀴즈"
+        docs = search_with_filter(query=query, k=10, **filters)
 
         # 3) 검색된 문서들을 프롬프트에 삽입할 텍스트로 변환
         reference_data = _format_reference_data(docs)
 
         # 4) 프롬프트 템플릿의 플레이스홀더를 실제 값으로 교체
-        #    {reference_data} → 검색 결과 텍스트
-        #    {topic} → "general" 등
-        #    {difficulty} → "easy" 등
+        #    {difficulty_instruction}:
+        #      - difficulty 지정 시 → "모두 easy 난이도로"
+        #      - difficulty 미지정 시 → "easy 2개, medium 2개, hard 1개로 혼합하여"
+        if difficulty:
+            difficulty_instruction = f"모두 {difficulty} 난이도로"
+        else:
+            difficulty_instruction = "easy 2개, medium 2개, hard 1개로 혼합하여"
+
         prompt = (
             self.system_prompt
             .replace("{reference_data}", reference_data)
             .replace("{topic}", topic)
-            .replace("{difficulty}", difficulty)
+            .replace("{difficulty_instruction}", difficulty_instruction)
         )
 
         # 5) Upstage Solar LLM 호출
         raw_response = await call_llm(
-            user_message="위 조건에 맞는 무역 퀴즈 1문제를 JSON으로 출제해주세요.",
+            user_message="위 조건에 맞는 무역 퀴즈 5문제를 JSON 배열로 출제해주세요.",
             system_prompt=prompt,
         )
 
-        # 6) LLM 응답에서 JSON 파싱
+        # 6) LLM 응답에서 JSON 배열 파싱
         #    실패 시 에러 응답 반환 (LLM이 JSON 형식을 지키지 않은 경우)
         try:
-            quiz_data = _parse_quiz_json(raw_response)
+            quiz_list = _parse_quiz_json(raw_response)
         except (json.JSONDecodeError, KeyError):
             return {
                 "response": {"error": "퀴즈 생성에 실패했습니다. 다시 시도해주세요."},
@@ -208,19 +233,23 @@ class QuizAgent:
                 "metadata": {"topic": topic, "difficulty": difficulty, "raw": raw_response},
             }
 
-        # 7) 퀴즈에 고유 ID를 부여하고 메모리에 저장 (나중에 채점할 때 조회용)
-        quiz_id = str(uuid.uuid4())[:8]
-        _quiz_store[quiz_id] = quiz_data
-
-        # 사용자에게는 quiz_id, 문제, 보기만 반환 (정답/해설은 숨김)
-        return {
-            "response": {
+        # 7) 각 문제에 고유 quiz_id를 부여하고 메모리에 저장
+        #    사용자에게는 quiz_id, 문제, 보기, 난이도만 반환 (정답/해설은 숨김)
+        quizzes = []
+        for quiz_data in quiz_list:
+            quiz_id = str(uuid.uuid4())[:8]
+            _quiz_store[quiz_id] = quiz_data
+            quizzes.append({
                 "quiz_id": quiz_id,
                 "question": quiz_data["question"],
                 "choices": quiz_data["choices"],
-            },
+                "difficulty": quiz_data.get("difficulty", difficulty or "mixed"),
+            })
+
+        return {
+            "response": quizzes,
             "agent_type": self.agent_type,
-            "metadata": {"topic": topic, "difficulty": difficulty},
+            "metadata": {"topic": topic, "difficulty": difficulty, "count": len(quizzes)},
         }
 
     def _evaluate_answer(self, quiz_id: str, user_answer: int) -> Dict[str, Any]:
