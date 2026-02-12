@@ -61,7 +61,7 @@ def get_email_agent(
     Returns:
         BaseAgent: Email Coach Agent
     """
-    from backend.agents.email_agent import EmailCoachAgent
+    from backend.agents.email import EmailCoachAgent
 
     if llm is None:
         llm = get_llm_gateway()
