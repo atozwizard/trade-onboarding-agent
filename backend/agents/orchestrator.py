@@ -4,6 +4,8 @@ import json
 from typing import Dict, Any, List, Optional
 import openai # Import openai
 from openai import OpenAI # Import OpenAI client
+from langsmith import traceable
+
 
 # Ensure backend directory is in path for imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
@@ -53,7 +55,7 @@ class OrchestratorAgent:
             os.environ["LANGCHAIN_PROJECT"] = self.settings.langsmith_project
         else:
             os.environ["LANGCHAIN_TRACING_V2"] = "false"
-
+    @traceable(name="orchestrator_run")
     def run(self, user_input: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Analyzes user input to determine intent, decides which agent to call,
