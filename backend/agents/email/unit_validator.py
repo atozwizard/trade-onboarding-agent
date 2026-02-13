@@ -199,11 +199,11 @@ class UnitValidator:
         # 1. 무게 단위 혼용 체크
         if len(weight_units) > 1:
             has_ton = any(
-                re.search(r'\bton|mt|metric\s+ton\b', unit, re.IGNORECASE)
+                re.search(r'(?<![a-zA-Z])(?:ton|tons|mt|metric\s+ton)\b', unit, re.IGNORECASE)
                 for unit in weight_units
             )
             has_kg = any(
-                re.search(r'\bkg|kilogram\b', unit, re.IGNORECASE)
+                re.search(r'(?<![a-zA-Z])(?:kg|kilogram|kilograms)\b', unit, re.IGNORECASE)
                 for unit in weight_units
             )
 
@@ -220,11 +220,11 @@ class UnitValidator:
         # 2. 부피 단위 혼용 체크
         if len(volume_units) > 1:
             has_cbm = any(
-                re.search(r'\bcbm|m3|cubic\s+meter\b', unit, re.IGNORECASE)
+                re.search(r'(?<![a-zA-Z])(?:cbm|m3|cubic\s+meter|cubic\s+meters)\b', unit, re.IGNORECASE)
                 for unit in volume_units
             )
             has_cft = any(
-                re.search(r'\bcft|cubic\s+feet\b', unit, re.IGNORECASE)
+                re.search(r'(?<![a-zA-Z])(?:cft|cubic\s+feet|cubic\s+ft)\b', unit, re.IGNORECASE)
                 for unit in volume_units
             )
 
@@ -276,16 +276,18 @@ class UnitValidator:
                 value = float(value_str)
 
                 # 단위 확인하여 kg로 변환
-                if re.search(r'\bton|mt|metric\s+ton\b', unit, re.IGNORECASE):
+                if re.search(r'(?<![a-zA-Z])(?:ton|tons|mt|metric\s+ton)\b', unit, re.IGNORECASE):
                     kg_values.append(value * 1000)
-                elif re.search(r'\bkg|kilogram\b', unit, re.IGNORECASE):
+                elif re.search(r'(?<![a-zA-Z])(?:kg|kilogram|kilograms)\b', unit, re.IGNORECASE):
                     kg_values.append(value)
-                elif re.search(r'\blbs|pounds\b', unit, re.IGNORECASE):
+                elif re.search(r'(?<![a-zA-Z])(?:lb|lbs|pound|pounds)\b', unit, re.IGNORECASE):
                     kg_values.append(value * 0.453592)
 
             # 모든 값이 동일한지 확인 (5% 오차 허용)
             if len(kg_values) >= 2:
                 base_value = kg_values[0]
+                if base_value == 0:
+                    return all(val == 0 for val in kg_values[1:])
                 for val in kg_values[1:]:
                     if abs(val - base_value) / base_value > 0.05:
                         return False
@@ -326,11 +328,11 @@ class UnitValidator:
                 value = float(value_str)
 
                 # 단위 확인
-                if re.search(r'\bton|mt|metric\s+ton\b', first_weight, re.IGNORECASE):
+                if re.search(r'(?<![a-zA-Z])(?:ton|tons|mt|metric\s+ton)\b', first_weight, re.IGNORECASE):
                     # 이미 톤 단위
                     kg_value = int(value * 1000)
                     parts.append(f"{int(value)} MT ({kg_value:,} kg)")
-                elif re.search(r'\bkg|kilogram\b', first_weight, re.IGNORECASE):
+                elif re.search(r'(?<![a-zA-Z])(?:kg|kilogram|kilograms)\b', first_weight, re.IGNORECASE):
                     # kg 단위 -> MT로 변환
                     if value >= 1000:
                         mt_value = value / 1000
@@ -345,7 +347,7 @@ class UnitValidator:
             first_volume = volume_units[0]
 
             # CFT -> CBM 변환 제안
-            if re.search(r'\bcft|cubic\s+feet\b', first_volume, re.IGNORECASE):
+            if re.search(r'(?<![a-zA-Z])(?:cft|cubic\s+feet|cubic\s+ft)\b', first_volume, re.IGNORECASE):
                 num_match = re.search(r'\d+(?:,\d{3})*(?:\.\d+)?', first_volume)
                 if num_match:
                     value = float(num_match.group().replace(',', ''))

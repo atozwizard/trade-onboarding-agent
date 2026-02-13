@@ -101,23 +101,24 @@ class TradeTermValidator:
 
                 if similar_terms:
                     best_match = similar_terms[0]
+                    best_term = best_match.get("term", "").upper()
+                    distance = best_match.get("distance", 1.0)
 
-                    # 유사도 기반 판단
-                    # distance가 낮을수록 유사함 (0.0 = 완전 일치)
-                    if best_match.get("distance", 1.0) < 0.3:
-                        # 정확한 용어로 판단
+                    # 유사도 기반 판단 (distance가 낮을수록 유사)
+                    # 알려진 용어와 문자열이 다르면 오타 가능성으로 처리
+                    if best_term and term_upper != best_term and distance < 0.8:
+                        incorrect_terms.append({
+                            "found": term,
+                            "should_be": best_term,
+                            "confidence": 1 - distance,
+                            "context": self._extract_context(email_content, term),
+                            "definition": best_match.get("definition", "")
+                        })
+                    elif distance < 0.3:
+                        # 동일 용어이거나 사실상 일치
                         verified_terms.append({
                             "term": term,
                             "full_name": best_match.get("full_name", "")
-                        })
-                    elif best_match.get("distance", 1.0) < 0.8:
-                        # 오타 가능성
-                        incorrect_terms.append({
-                            "found": term,
-                            "should_be": best_match.get("term", ""),
-                            "confidence": 1 - best_match.get("distance", 1.0),
-                            "context": self._extract_context(email_content, term),
-                            "definition": best_match.get("definition", "")
                         })
 
             # 3. 제안 생성
@@ -202,16 +203,16 @@ class TradeTermValidator:
 
             similar_terms = []
             for doc in results:
-                # metadata에서 정보 추출
-                metadata = doc.get("metadata", {})
+                content, metadata, distance = self._extract_document_fields(doc)
                 similar_terms.append({
                     "term": metadata.get("term", ""),
                     "full_name": metadata.get("full_name", ""),
                     "korean_name": metadata.get("korean_name", ""),
-                    "definition": doc.get("content", "").split("|")[-1].strip() if "|" in doc.get("content", "") else "",
-                    "distance": doc.get("distance", 1.0)
+                    "definition": content.split("|")[-1].strip() if "|" in content else "",
+                    "distance": distance
                 })
 
+            similar_terms.sort(key=lambda item: item.get("distance", 1.0))
             return similar_terms
 
         except Exception as e:
@@ -236,18 +237,36 @@ class TradeTermValidator:
             )
 
             if results:
-                doc = results[0]
-                metadata = doc.get("metadata", {})
+                content, metadata, _ = self._extract_document_fields(results[0])
                 return {
                     "full_name": metadata.get("full_name", ""),
                     "korean_name": metadata.get("korean_name", ""),
-                    "definition": doc.get("content", "").split("|")[-1].strip() if "|" in doc.get("content", "") else ""
+                    "definition": content.split("|")[-1].strip() if "|" in content else ""
                 }
 
         except Exception as e:
             self._logger.warning(f"Definition retrieval error: {e}")
 
         return {}
+
+    @staticmethod
+    def _extract_document_fields(doc: Any) -> tuple[str, Dict[str, Any], float]:
+        """
+        RetrievedDocument(객체)와 dict 형태를 모두 지원하여 필드 추출.
+        """
+        if hasattr(doc, "content") and hasattr(doc, "metadata"):
+            content = getattr(doc, "content", "") or ""
+            metadata = getattr(doc, "metadata", {}) or {}
+            distance = getattr(doc, "distance", 1.0)
+            return content, metadata, float(distance if distance is not None else 1.0)
+
+        if isinstance(doc, dict):
+            content = doc.get("content", "") or doc.get("document", "")
+            metadata = doc.get("metadata", {}) or {}
+            distance = doc.get("distance", 1.0)
+            return content, metadata, float(distance if distance is not None else 1.0)
+
+        return "", {}, 1.0
 
     def _extract_context(self, email_content: str, term: str) -> str:
         """
