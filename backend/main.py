@@ -13,13 +13,12 @@ from backend.config import get_settings
 from backend.api import routes
 from backend.rag.chroma_client import get_or_create_collection
 from backend.rag.ingest import ingest_data
-import logging
+from backend.utils.logger import setup_logging, get_logger
 
 # 로깅 설정
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 settings = get_settings()
+setup_logging(environment=settings.environment, app_name="trade_onboarding")
+logger = get_logger(__name__)
 
 # LangSmith 트레이싱 설정
 # config.py의 langsmith_tracing=True이고 API 키가 있을 때만 활성화

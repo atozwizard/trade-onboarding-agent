@@ -1,14 +1,19 @@
 """
 API Routes
 """
-from fastapi import APIRouter, HTTPException
+import asyncio
+import logging
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
+from backend.agents.base import BaseAgent
+from backend.dependencies import get_email_agent
 from backend.agents.quiz_agent import QuizAgent, _quiz_store
 from backend.agents.eval_agent import EvalAgent
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # 모듈 레벨 싱글톤
 quiz_agent = QuizAgent()
@@ -28,6 +33,8 @@ class ChatResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
+# ====== Quiz Agent Models ======
+
 class QuizRequest(BaseModel):
     """퀴즈 생성 요청"""
     topic: str = Field(default="general", description="주제: general, mistakes, negotiation, country, documents")
@@ -46,6 +53,54 @@ class QuizEvalRequest(BaseModel):
     topic: str = Field(default="general", description="주제 (원본 데이터 대조용)")
 
 
+# ====== Email Agent Models ======
+
+class EmailDraftRequest(BaseModel):
+    """Email draft generation request"""
+    user_input: str = Field(..., description="사용자 요청 (예: '미국 바이어에게 견적 요청 이메일 작성')")
+    recipient_country: Optional[str] = Field(None, description="수신자 국가 (예: USA, Japan, Korea)")
+    relationship: Optional[str] = Field("first_contact", description="관계 (first_contact/ongoing/long_term)")
+    purpose: Optional[str] = Field(None, description="이메일 목적 (quotation/negotiation/inquiry 등)")
+
+
+class EmailReviewRequest(BaseModel):
+    """Email review request"""
+    email_content: str = Field(..., description="검토할 이메일 본문")
+    recipient_country: Optional[str] = Field(None, description="수신자 국가")
+    purpose: Optional[str] = Field(None, description="이메일 목적")
+
+
+class RiskItem(BaseModel):
+    """Individual risk item"""
+    type: str
+    severity: str
+    location: str
+    current: str
+    risk: str
+    recommendation: str
+    source: Optional[str] = None
+
+
+class ToneAnalysis(BaseModel):
+    """Tone analysis result"""
+    current_tone: str
+    recommended_tone: str
+    score: float
+    issues: List[str]
+    improvements: List[str]
+    cultural_notes: List[str]
+    summary: str
+
+
+class EmailResponse(BaseModel):
+    """Email agent response"""
+    response: str
+    agent_type: str = "email"
+    metadata: Dict[str, Any]
+
+
+# ====== Common Endpoints ======
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
@@ -58,6 +113,8 @@ async def chat(request: ChatRequest):
         metadata={"status": "not_implemented"}
     )
 
+
+# ====== Quiz Agent Endpoints ======
 
 @router.post("/quiz/start")
 async def start_quiz(request: QuizRequest):
@@ -104,3 +161,67 @@ async def eval_quiz(request: QuizEvalRequest):
         raise HTTPException(status_code=500, detail=result["response"]["error"])
 
     return result
+
+
+# ====== Email Agent Endpoints ======
+
+@router.post("/email/draft", response_model=EmailResponse)
+async def draft_email(
+    request: EmailDraftRequest,
+    agent: BaseAgent = Depends(get_email_agent)
+):
+    """
+    Generate email draft with RAG + LLM
+    """
+    try:
+        logger.info(f"Draft email request: {request.user_input[:50]}...")
+
+        context = {
+            "mode": "draft",
+            "recipient_country": request.recipient_country or "Unknown",
+            "relationship": request.relationship,
+            "purpose": request.purpose
+        }
+
+        result = await asyncio.to_thread(
+            agent.run,
+            user_input=request.user_input,
+            context=context
+        )
+
+        return EmailResponse(**result.to_dict())
+
+    except Exception as e:
+        logger.error(f"Draft email failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Email draft generation failed: {str(e)}")
+
+
+@router.post("/email/review", response_model=EmailResponse)
+async def review_email(
+    request: EmailReviewRequest,
+    agent: BaseAgent = Depends(get_email_agent)
+):
+    """
+    Review existing email for risks, tone, and improvements
+    """
+    try:
+        logger.info(f"Review email request: {len(request.email_content)} characters")
+
+        context = {
+            "mode": "review",
+            "email_content": request.email_content,
+            "recipient_country": request.recipient_country or "Unknown",
+            "purpose": request.purpose
+        }
+
+        result = await asyncio.to_thread(
+            agent.run,
+            user_input="",
+            context=context
+        )
+
+        return EmailResponse(**result.to_dict())
+
+    except Exception as e:
+        logger.error(f"Review email failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Email review failed: {str(e)}")
