@@ -232,5 +232,5 @@ CONFIDENCE_SCORE_PROMPT = """
 {rag_documents}
 
 <출력 형식>
-단순히 신뢰도 점수(float)만 출력하십시오. 예: 0.85
+단순히 신뢰도 점수(float)만 출력하십시오.  예: 0.85
 """
