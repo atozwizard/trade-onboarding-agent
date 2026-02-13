@@ -1,112 +1,89 @@
 """
-퀴즈 학습 에이전트 (RAG 기반)
+용어 퀴즈 에이전트 (RAG 기반)
 
 [전체 흐름]
   사용자 요청 → routes.py → QuizAgent.run()
-    ├─ action="generate" → RAG 검색 → LLM이 5문제 생성 → 개별 quiz_id 발급 후 반환
-    └─ action="evaluate" → 저장된 퀴즈에서 정답 비교 → 결과 반환
+    ├─ action="generate"
+    │     1) RAG 검색 (정답 후보 + 오답 후보)
+    │     2) LLM이 5문제 생성
+    │     3) EvalTool로 문제별 검증
+    │     4) 불합격 문제 재시도 (MAX_RETRY=2)
+    │     5) 재시도 소진 시 다른 용어로 대체 생성
+    │     6) 합격 풀 5문제 반환
+    └─ action="evaluate" → 저장된 퀴즈에서 정답 비교
 
-[난이도 처리]
-  - difficulty 지정 시: 5문제 모두 해당 난이도로 생성
-  - difficulty 미지정 시: easy 2개, medium 2개, hard 1개 혼합 구성
+[퀴즈 유형]
+  - 용어→설명: 용어가 문제, 설명 4개가 선택지
+  - 설명→용어: 설명이 문제, 용어 4개가 선택지
 
-[이전 방식과 차이]
-  - 이전: dataset/ 폴더의 JSON 파일을 직접 읽어서 퀴즈 소스로 사용, 1문제씩 생성
-  - 현재: ChromaDB 벡터 DB에서 RAG 검색, LLM 1회 호출로 5문제 배열 생성
+[난이도]
+  - 지정 시: 5문제 모두 해당 난이도
+  - 미지정 시: easy 2 + medium 2 + hard 1 혼합
 """
 import json
 import uuid
 import os
+import logging
 from typing import Dict, Any, Optional, List
 
-from langsmith import traceable  # LangSmith 트레이싱 데코레이터
+from langsmith import traceable
 
-# call_llm: Upstage Solar LLM에 프롬프트를 보내고 응답 텍스트를 받는 함수
 from backend.utils.llm import call_llm
-# search_with_filter: ChromaDB에서 메타데이터 필터 조건으로 유사 문서를 검색하는 함수
 from backend.rag.retriever import search_with_filter
+from backend.agents.eval_agent import evaluate_quiz_list
+
+logger = logging.getLogger(__name__)
 
 # ──────────────────────────────────────────────
-# 상수 정의
+# 상수
 # ──────────────────────────────────────────────
 
-# 프롬프트 파일이 위치한 디렉토리 경로
-# 이 파일(quiz_agent.py) 기준으로 ../prompts/ 를 가리킴
 PROMPTS_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), '..', 'prompts'
 )
 
-# 주제(topic)별 RAG 검색 시 사용할 메타데이터 필터 매핑
-# 예: topic="mistakes" → ChromaDB에서 document_type="common_mistake"인 문서만 검색
-# "general"은 필터 없이 전체 문서에서 검색
-TOPIC_FILTER_MAP: Dict[str, Dict[str, Optional[str]]] = {
-    "general": {},                                        # 필터 없음 (전체 검색)
-    "mistakes": {"document_type": "common_mistake"},      # 자주 하는 실수 관련 문서
-    "negotiation": {"document_type": "negotiation_strategy"},  # 협상 전략 문서
-    "country": {"document_type": "country_guideline"},    # 국가별 가이드라인 문서
-    "documents": {"document_type": "error_checklist"},    # 서류 오류 체크리스트 문서
-}
+MAX_RETRY = 2  # 불합격 문제 재시도 최대 횟수
 
-# 사용자가 선택한 난이도(easy/medium/hard)를
-# ChromaDB 메타데이터의 level 값(beginner/working/manager)으로 변환
-DIFFICULTY_LEVEL_MAP: Dict[str, str] = {
-    "easy": "beginner",   # 신입 수준
-    "medium": "working",  # 실무자 수준
-    "hard": "manager",    # 관리자 수준
-}
-
-# 생성된 퀴즈를 메모리에 임시 저장하는 딕셔너리
-# key: quiz_id (8자리 UUID), value: 퀴즈 데이터 (question, choices, answer, explanation, difficulty)
-# 서버가 재시작되면 초기화됨 (영구 저장이 아님)
+# 퀴즈를 메모리에 임시 저장 (서버 재시작 시 초기화)
 _quiz_store: Dict[str, Dict[str, Any]] = {}
 
 
 # ──────────────────────────────────────────────
-# 유틸리티 함수
+# 유틸리티
 # ──────────────────────────────────────────────
 
 def _load_prompt(filename: str) -> str:
-    """프롬프트 템플릿 파일(.txt)을 읽어서 문자열로 반환한다.
-    반환된 문자열에는 {reference_data}, {topic}, {difficulty_instruction} 같은
-    플레이스홀더가 포함되어 있고, 나중에 .replace()로 실제 값을 채운다.
-    """
     prompt_path = os.path.join(PROMPTS_DIR, filename)
     with open(prompt_path, "r", encoding="utf-8") as f:
         return f.read()
 
 
 def _parse_quiz_json(raw: str) -> List[Dict[str, Any]]:
-    """LLM이 반환한 텍스트에서 JSON 배열을 추출하여 파싱한다.
-    LLM이 ```json ... ``` 코드블록으로 감쌀 수 있으므로 이를 제거한 후 파싱한다.
-
-    예시 입력:
-        ```json
-        [{"question": "...", "choices": [...], "answer": 0, ...}, ...]
-        ```
-    → [{"question": "...", ...}, ...] (list of dict)
+    """LLM 응답에서 JSON 배열 추출.
+    앞뒤 텍스트, ```json ... ``` 코드블록 모두 처리.
     """
+    import re
     text = raw.strip()
-    # ```json 또는 ``` 으로 시작하는 줄 제거
-    if text.startswith("```"):
-        lines = text.split("\n")
-        lines = [l for l in lines if not l.strip().startswith("```")]
-        text = "\n".join(lines)
+
+    # 1) 코드블록 내 JSON 추출 시도
+    match = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
+    if match:
+        text = match.group(1).strip()
+
+    # 2) 코드블록 없으면 [ ... ] 범위 추출
+    if not text.startswith('[') and not text.startswith('{'):
+        arr_match = re.search(r'(\[[\s\S]*\])', text)
+        if arr_match:
+            text = arr_match.group(1)
+
     parsed = json.loads(text)
-    # 혹시 LLM이 단일 객체로 반환하면 배열로 감싼다
     if isinstance(parsed, dict):
         parsed = [parsed]
     return parsed
 
 
 def _format_reference_data(docs: list) -> str:
-    """RAG 검색 결과(문서 리스트)를 LLM에게 넘길 텍스트 형태로 변환한다.
-
-    입력 예시 (docs):
-        [{"document": "FOB는 ...", "metadata": {"topic": "incoterms", "level": "beginner"}, "distance": 0.3}]
-
-    출력 예시:
-        - FOB는 ... (topic: incoterms | level: beginner)
-    """
+    """RAG 검색 결과를 텍스트로 변환."""
     if not docs:
         return "(참고 데이터 없음)"
     lines = []
@@ -114,10 +91,7 @@ def _format_reference_data(docs: list) -> str:
         content = doc.get("document", "")
         metadata = doc.get("metadata", {})
         if metadata:
-            # 메타데이터를 "key: value | key: value" 형태로 합침
-            detail = " | ".join(
-                f"{k}: {v}" for k, v in metadata.items() if v
-            )
+            detail = " | ".join(f"{k}: {v}" for k, v in metadata.items() if v)
             lines.append(f"- {content} ({detail})" if detail else f"- {content}")
         else:
             lines.append(f"- {content}")
@@ -125,40 +99,30 @@ def _format_reference_data(docs: list) -> str:
 
 
 # ──────────────────────────────────────────────
-# QuizAgent 클래스
+# QuizAgent
 # ──────────────────────────────────────────────
 
 class QuizAgent:
-    """RAG 기반 퀴즈 학습 에이전트
+    """RAG 기반 용어 퀴즈 에이전트
 
-    routes.py에서 싱글톤으로 생성되어 사용된다:
+    사용법:
         quiz_agent = QuizAgent()
-
-        # 난이도 지정: 5문제 모두 easy
-        result = await quiz_agent.run("퀴즈 생성", {"action": "generate", "topic": "general", "difficulty": "easy"})
-
-        # 난이도 미지정: easy 2 + medium 2 + hard 1 혼합
-        result = await quiz_agent.run("퀴즈 생성", {"action": "generate", "topic": "general"})
+        result = await quiz_agent.run("퀴즈 생성", {"action": "generate", "difficulty": "easy"})
+        result = await quiz_agent.run("답변", {"action": "evaluate", "quiz_id": "abc", "user_answer": 1})
     """
 
     agent_type: str = "quiz"
 
     def __init__(self):
-        # 서버 시작 시 프롬프트 템플릿을 한 번만 파일에서 읽어 메모리에 보관
         self.system_prompt = _load_prompt("quiz_prompt.txt")
 
     async def run(self, user_input: str, context: Dict[str, Any]) -> Dict[str, Any]:
-        """에이전트 진입점. context["action"] 값에 따라 분기한다.
-
-        - "generate": 새 퀴즈 5문제를 생성 (RAG + LLM)
-        - "evaluate": 이미 생성된 퀴즈에 대해 사용자 답안을 채점
-        """
+        """에이전트 진입점."""
         action = context.get("action", "generate")
 
         if action == "generate":
-            topic = context.get("topic", "general")
-            difficulty = context.get("difficulty")  # None이면 혼합 난이도
-            return await self._generate_quiz(topic, difficulty)
+            difficulty = context.get("difficulty")
+            return await self._generate_with_eval(difficulty)
         elif action == "evaluate":
             quiz_id = context.get("quiz_id", "")
             user_answer = context.get("user_answer", 0)
@@ -170,103 +134,206 @@ class QuizAgent:
                 "metadata": {},
             }
 
-    @traceable(name="quiz_generate", run_type="chain")
-    async def _generate_quiz(self, topic: str, difficulty: Optional[str] = None) -> Dict[str, Any]:
-        """RAG 검색 → 프롬프트 조립 → LLM 호출 → JSON 파싱 → 저장 순서로 퀴즈 5문제를 생성한다.
+    # ──────────────────────────────────────────
+    # 핵심: 생성 → 검증 → 재시도 → 대체 생성 루프
+    # ──────────────────────────────────────────
 
-        전체 파이프라인:
-            1) topic → ChromaDB 필터 조건 구성 (difficulty 있으면 level 필터 추가)
-            2) ChromaDB에서 유사 문서 검색
-            3) 검색 결과를 텍스트로 변환
-            4) quiz_prompt.txt 템플릿에 검색 결과 + topic + difficulty_instruction 삽입
-            5) LLM에 프롬프트 전송 → 5문제 JSON 배열 수신
-            6) 각 문제에 quiz_id 발급, 메모리에 저장
+    @traceable(name="quiz_generate_with_eval", run_type="chain")
+    async def _generate_with_eval(self, difficulty: Optional[str] = None) -> Dict[str, Any]:
+        """합격한 5문제를 모을 때까지 생성-검증-재시도-대체 생성을 수행한다."""
+        passed_quizzes: List[Dict[str, Any]] = []  # 합격 풀
+        used_terms: List[str] = []                  # 사용된 용어 (대체 생성 시 제외용)
+        retry_counts: Dict[str, int] = {}           # quiz_id별 재시도 횟수
 
-        Args:
-            topic: 퀴즈 주제 (general, mistakes, negotiation, country, documents)
-            difficulty: 난이도 (easy, medium, hard). None이면 혼합 구성
-        """
-        # 1) RAG 필터 구성
-        #    예: topic="mistakes", difficulty="easy"
-        #    → filters = {"document_type": "common_mistake", "level": "beginner"}
-        #    difficulty=None이면 level 필터 없이 전체 레벨에서 검색
-        filters = TOPIC_FILTER_MAP.get(topic, {}).copy()
-        if difficulty:
-            level = DIFFICULTY_LEVEL_MAP.get(difficulty, "beginner")
-            filters["level"] = level
-
-        # 2) ChromaDB에서 필터 조건에 맞는 유사 문서 검색
-        #    5문제 생성에 충분한 참고 자료를 확보하기 위해 k=10
-        query = f"{topic} 무역 퀴즈"
-        docs = search_with_filter(query=query, k=10, **filters)
-
-        # 3) 검색된 문서들을 프롬프트에 삽입할 텍스트로 변환
-        reference_data = _format_reference_data(docs)
-
-        # 4) 프롬프트 템플릿의 플레이스홀더를 실제 값으로 교체
-        #    {difficulty_instruction}:
-        #      - difficulty 지정 시 → "모두 easy 난이도로"
-        #      - difficulty 미지정 시 → "easy 2개, medium 2개, hard 1개로 혼합하여"
-        if difficulty:
-            difficulty_instruction = f"모두 {difficulty} 난이도로"
-        else:
-            difficulty_instruction = "easy 2개, medium 2개, hard 1개로 혼합하여"
-
-        prompt = (
-            self.system_prompt
-            .replace("{reference_data}", reference_data)
-            .replace("{topic}", topic)
-            .replace("{difficulty_instruction}", difficulty_instruction)
+        # ── 1단계: 최초 5문제 생성 ──
+        quizzes = await self._generate_quizzes(
+            count=5, difficulty=difficulty,
+            exclude_terms=[], feedback_items=[]
         )
+        if not quizzes:
+            return self._error_response("퀴즈 생성에 실패했습니다.", difficulty)
 
-        # 5) Upstage Solar LLM 호출
-        raw_response = await call_llm(
-            user_message="위 조건에 맞는 무역 퀴즈 5문제를 JSON 배열로 출제해주세요.",
-            system_prompt=prompt,
-        )
+        # 사용된 용어 기록
+        for q in quizzes:
+            used_terms.append(self._extract_term(q))
 
-        # 6) LLM 응답에서 JSON 배열 파싱
-        #    실패 시 에러 응답 반환 (LLM이 JSON 형식을 지키지 않은 경우)
-        try:
-            quiz_list = _parse_quiz_json(raw_response)
-        except (json.JSONDecodeError, KeyError):
-            return {
-                "response": {"error": "퀴즈 생성에 실패했습니다. 다시 시도해주세요."},
-                "agent_type": self.agent_type,
-                "metadata": {"topic": topic, "difficulty": difficulty, "raw": raw_response},
-            }
+        # ── 2단계: EvalTool 검증 ──
+        eval_results = await evaluate_quiz_list(quizzes)
+        passed, failed = self._split_by_validity(quizzes, eval_results)
+        passed_quizzes.extend(passed)
 
-        # 7) 각 문제에 고유 quiz_id를 부여하고 메모리에 저장
-        #    사용자에게는 quiz_id, 문제, 보기, 난이도만 반환 (정답/해설은 숨김)
-        quizzes = []
-        for quiz_data in quiz_list:
-            quiz_id = str(uuid.uuid4())[:8]
-            _quiz_store[quiz_id] = quiz_data
-            quizzes.append({
-                "quiz_id": quiz_id,
-                "question": quiz_data["question"],
-                "choices": quiz_data["choices"],
-                "difficulty": quiz_data.get("difficulty", difficulty or "mixed"),
+        # 재시도 카운트 초기화
+        for q in failed:
+            retry_counts[q["quiz_id"]] = 0
+
+        # ── 3단계: 불합격 문제 재시도 루프 (MAX_RETRY=2) ──
+        while failed and any(retry_counts.get(q["quiz_id"], 0) < MAX_RETRY for q in failed):
+            # 재시도 횟수가 남은 문제만 필터
+            retryable = [q for q in failed if retry_counts.get(q["quiz_id"], 0) < MAX_RETRY]
+            if not retryable:
+                break
+
+            # 이전 실패 피드백 수집
+            feedback_items = self._collect_feedback(retryable, eval_results)
+
+            # 불합격 문제 수만큼 재생성
+            regenerated = await self._generate_quizzes(
+                count=len(retryable), difficulty=difficulty,
+                exclude_terms=[], feedback_items=feedback_items
+            )
+
+            if regenerated:
+                for q in regenerated:
+                    used_terms.append(self._extract_term(q))
+
+                # 재검증
+                re_eval = await evaluate_quiz_list(regenerated)
+                re_passed, re_failed = self._split_by_validity(regenerated, re_eval)
+                passed_quizzes.extend(re_passed)
+
+                # 재시도 카운트 업데이트
+                # 재생성된 문제는 새 quiz_id를 가지므로 초기 카운트 1로 등록
+                for q in retryable:
+                    retry_counts[q["quiz_id"]] = retry_counts.get(q["quiz_id"], 0) + 1
+                for q in re_failed:
+                    if q["quiz_id"] not in retry_counts:
+                        retry_counts[q["quiz_id"]] = 1
+
+                # 여전히 불합격인 문제에 새로운 eval 결과 반영
+                failed = re_failed
+                eval_results = re_eval
+            else:
+                # 재생성 자체가 실패하면 카운트만 올리고 루프 종료
+                for q in retryable:
+                    retry_counts[q["quiz_id"]] = MAX_RETRY
+                break
+
+            # 5문제 달성 시 즉시 종료
+            if len(passed_quizzes) >= 5:
+                break
+
+        # ── 4단계: 재시도 소진 후 대체 생성 ──
+        remaining = 5 - len(passed_quizzes)
+        if remaining > 0:
+            logger.info(f"대체 생성 필요: {remaining}문제 (기존 용어 {len(used_terms)}개 제외)")
+            replacement = await self._generate_quizzes(
+                count=remaining, difficulty=difficulty,
+                exclude_terms=used_terms, feedback_items=[]
+            )
+            if replacement:
+                for q in replacement:
+                    used_terms.append(self._extract_term(q))
+
+                rep_eval = await evaluate_quiz_list(replacement)
+                rep_passed, _ = self._split_by_validity(replacement, rep_eval)
+                passed_quizzes.extend(rep_passed)
+
+        # ── 5단계: 합격 풀에서 메모리 저장 & 응답 구성 ──
+        final_quizzes = passed_quizzes[:5]
+        response_list = []
+        for q in final_quizzes:
+            qid = q["quiz_id"]
+            _quiz_store[qid] = q
+            response_list.append({
+                "quiz_id": qid,
+                "question": q["question"],
+                "choices": q["choices"],
+                "quiz_type": q.get("quiz_type", ""),
+                "difficulty": q.get("difficulty", difficulty or "mixed"),
             })
 
         return {
-            "response": quizzes,
+            "response": response_list,
             "agent_type": self.agent_type,
-            "metadata": {"topic": topic, "difficulty": difficulty, "count": len(quizzes)},
+            "metadata": {
+                "difficulty": difficulty,
+                "count": len(response_list),
+                "total_generated": len(used_terms),
+            },
         }
+
+    # ──────────────────────────────────────────
+    # LLM 호출: 퀴즈 N문제 생성
+    # ──────────────────────────────────────────
+
+    @traceable(name="quiz_generate_batch", run_type="chain")
+    async def _generate_quizzes(
+        self,
+        count: int,
+        difficulty: Optional[str],
+        exclude_terms: List[str],
+        feedback_items: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """RAG 검색 → 프롬프트 조립 → LLM 호출 → JSON 파싱."""
+        # 1) RAG 검색: 정답 후보
+        docs = search_with_filter(query="무역 용어", k=10)
+        reference_data = _format_reference_data(docs)
+
+        # 2) RAG 검색: 오답 후보 (유사 용어)
+        distractor_docs = search_with_filter(query="무역 용어 유사 개념", k=10)
+        distractor_data = _format_reference_data(distractor_docs)
+
+        # 3) 난이도 지시문
+        if difficulty:
+            difficulty_instruction = f"{count}문제를 모두 {difficulty} 난이도로 출제하세요."
+        else:
+            if count >= 5:
+                difficulty_instruction = f"{count}문제를 easy 2개, medium 2개, hard 1개로 혼합하여 출제하세요."
+            else:
+                difficulty_instruction = f"{count}문제를 출제하세요. 난이도는 적절히 혼합하세요."
+
+        # 4) 제외 용어 지시문
+        if exclude_terms:
+            terms_str = ", ".join(exclude_terms)
+            exclude_instruction = f"\n- 다음 용어는 이미 사용했으므로 제외하세요: [{terms_str}]"
+        else:
+            exclude_instruction = ""
+
+        # 5) 피드백 지시문 (재시도 시)
+        if feedback_items:
+            fb_lines = []
+            for fb in feedback_items:
+                issues_str = "; ".join(fb.get("issues", []))
+                fb_lines.append(f"  - 이전 문제 불합격 사유: {issues_str}")
+            feedback_instruction = "\n- 이전 생성에서 아래 문제가 지적되었습니다. 같은 실수를 반복하지 마세요:\n" + "\n".join(fb_lines)
+        else:
+            feedback_instruction = ""
+
+        # 6) 프롬프트 조립
+        prompt = (
+            self.system_prompt
+            .replace("{reference_data}", reference_data)
+            .replace("{distractor_data}", distractor_data)
+            .replace("{difficulty_instruction}", difficulty_instruction)
+            .replace("{exclude_instruction}", exclude_instruction)
+            .replace("{feedback_instruction}", feedback_instruction)
+        )
+
+        # 7) LLM 호출
+        raw = await call_llm(
+            user_message=f"위 조건에 맞는 무역 용어 퀴즈 {count}문제를 JSON 배열로 출제해주세요.",
+            system_prompt=prompt,
+        )
+
+        # 8) 파싱 & quiz_id 발급
+        try:
+            quiz_list = _parse_quiz_json(raw)
+        except (json.JSONDecodeError, KeyError):
+            logger.error(f"퀴즈 JSON 파싱 실패: {raw[:200]}")
+            return []
+
+        for q in quiz_list:
+            q["quiz_id"] = str(uuid.uuid4())[:8]
+
+        return quiz_list
+
+    # ──────────────────────────────────────────
+    # 답안 채점
+    # ──────────────────────────────────────────
 
     @traceable(name="quiz_evaluate_answer", run_type="chain")
     def _evaluate_answer(self, quiz_id: str, user_answer: int) -> Dict[str, Any]:
-        """사용자가 제출한 답안을 저장된 퀴즈의 정답과 비교하여 채점한다.
-
-        Args:
-            quiz_id: _generate_quiz()에서 발급한 퀴즈 ID
-            user_answer: 사용자가 선택한 보기 인덱스 (0~3)
-
-        Returns:
-            정답 여부, 정답 보기, 해설이 포함된 딕셔너리
-        """
-        # 메모리에서 퀴즈 데이터 조회
+        """저장된 퀴즈의 정답과 사용자 답안을 비교."""
         quiz_data = _quiz_store.get(quiz_id)
 
         if not quiz_data:
@@ -276,7 +343,6 @@ class QuizAgent:
                 "metadata": {"quiz_id": quiz_id},
             }
 
-        # 정답 비교 (둘 다 0~3 인덱스)
         correct_answer = quiz_data["answer"]
         is_correct = user_answer == correct_answer
 
@@ -286,9 +352,67 @@ class QuizAgent:
                 "is_correct": is_correct,
                 "user_answer": user_answer,
                 "correct_answer": correct_answer,
-                "correct_choice": quiz_data["choices"][correct_answer],  # 정답 텍스트
-                "explanation": quiz_data["explanation"],                 # LLM이 생성한 해설
+                "correct_choice": quiz_data["choices"][correct_answer],
+                "explanation": quiz_data["explanation"],
             },
             "agent_type": self.agent_type,
             "metadata": {"quiz_id": quiz_id},
+        }
+
+    # ──────────────────────────────────────────
+    # 헬퍼
+    # ──────────────────────────────────────────
+
+    @staticmethod
+    def _split_by_validity(
+        quizzes: List[Dict[str, Any]],
+        eval_results: List[Dict[str, Any]],
+    ) -> tuple:
+        """eval 결과를 기반으로 합격/불합격 분리."""
+        eval_map = {r["quiz_id"]: r for r in eval_results}
+        passed, failed = [], []
+        for q in quizzes:
+            qid = q["quiz_id"]
+            result = eval_map.get(qid, {})
+            if result.get("is_valid", False):
+                passed.append(q)
+            else:
+                failed.append(q)
+        return passed, failed
+
+    @staticmethod
+    def _collect_feedback(
+        failed_quizzes: List[Dict[str, Any]],
+        eval_results: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """불합격 문제들의 issues를 피드백 목록으로 수집."""
+        eval_map = {r["quiz_id"]: r for r in eval_results}
+        feedback = []
+        for q in failed_quizzes:
+            qid = q["quiz_id"]
+            result = eval_map.get(qid, {})
+            feedback.append({
+                "quiz_id": qid,
+                "issues": result.get("issues", ["사유 없음"]),
+            })
+        return feedback
+
+    @staticmethod
+    def _extract_term(quiz: Dict[str, Any]) -> str:
+        """퀴즈에서 핵심 용어를 추출 (대체 생성 시 제외 목록용)."""
+        quiz_type = quiz.get("quiz_type", "")
+        if "용어→설명" in quiz_type:
+            # 문제가 용어 → 문제 텍스트에서 추출
+            return quiz.get("question", "").split("란")[0].split("은")[0].strip().strip('"').strip("'")
+        else:
+            # 설명→용어 → 정답 선택지가 용어
+            correct_idx = quiz.get("answer", 0)
+            choices = quiz.get("choices", [])
+            return choices[correct_idx] if correct_idx < len(choices) else ""
+
+    def _error_response(self, message: str, difficulty: Optional[str]) -> Dict[str, Any]:
+        return {
+            "response": {"error": message},
+            "agent_type": self.agent_type,
+            "metadata": {"difficulty": difficulty},
         }

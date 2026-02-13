@@ -21,12 +21,14 @@ setup_logging(environment=settings.environment, app_name="trade_onboarding")
 logger = get_logger(__name__)
 
 # LangSmith 트레이싱 설정
-# config.py의 langsmith_tracing=True이고 API 키가 있을 때만 활성화
-# LangChain은 아래 환경변수가 설정되면 모든 LLM 호출을 자동으로 LangSmith에 기록
+# @traceable 데코레이터는 LANGSMITH_API_KEY를 참조하므로 두 변수 모두 설정
 if settings.langsmith_tracing and settings.langsmith_api_key:
     os.environ["LANGCHAIN_TRACING_V2"] = "true"
     os.environ["LANGCHAIN_API_KEY"] = settings.langsmith_api_key
     os.environ["LANGCHAIN_PROJECT"] = settings.langsmith_project
+    os.environ["LANGSMITH_API_KEY"] = settings.langsmith_api_key
+    os.environ["LANGSMITH_TRACING"] = "true"
+    os.environ["LANGSMITH_PROJECT"] = settings.langsmith_project
 
 app = FastAPI(
     title="Trade Onboarding AI Coach",

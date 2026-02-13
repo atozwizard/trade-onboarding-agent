@@ -10,14 +10,13 @@ from typing import Optional, Dict, Any, List
 from backend.agents.base import BaseAgent
 from backend.dependencies import get_email_agent
 from backend.agents.quiz_agent import QuizAgent, _quiz_store
-from backend.agents.eval_agent import EvalAgent
+from backend.agents.eval_agent import evaluate_quiz_list
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # 모듈 레벨 싱글톤
 quiz_agent = QuizAgent()
-eval_agent = EvalAgent()
 
 
 class ChatRequest(BaseModel):
@@ -37,7 +36,6 @@ class ChatResponse(BaseModel):
 
 class QuizRequest(BaseModel):
     """퀴즈 생성 요청"""
-    topic: str = Field(default="general", description="주제: general, mistakes, negotiation, country, documents")
     difficulty: Optional[str] = Field(default=None, description="난이도: easy, medium, hard (미지정 시 혼합 출제)")
 
 
@@ -48,9 +46,8 @@ class QuizAnswerRequest(BaseModel):
 
 
 class QuizEvalRequest(BaseModel):
-    """퀴즈 품질 평가 요청"""
-    quiz_id: str
-    topic: str = Field(default="general", description="주제 (원본 데이터 대조용)")
+    """퀴즈 품질 수동 평가 요청"""
+    quiz_ids: List[str] = Field(..., description="평가할 퀴즈 ID 목록")
 
 
 # ====== Email Agent Models ======
@@ -118,10 +115,10 @@ async def chat(request: ChatRequest):
 
 @router.post("/quiz/start")
 async def start_quiz(request: QuizRequest):
-    """퀴즈를 생성하여 반환한다."""
+    """퀴즈를 생성하여 반환한다. 내부에서 EvalTool 검증 + 재시도가 자동 수행된다."""
     result = await quiz_agent.run(
         "퀴즈 생성",
-        {"action": "generate", "topic": request.topic, "difficulty": request.difficulty},
+        {"action": "generate", "difficulty": request.difficulty},
     )
 
     if isinstance(result["response"], dict) and "error" in result["response"]:
@@ -146,21 +143,16 @@ async def answer_quiz(request: QuizAnswerRequest):
 
 @router.post("/quiz/evaluate")
 async def eval_quiz(request: QuizEvalRequest):
-    """생성된 퀴즈의 품질을 평가하여 검증 리포트를 반환한다."""
-    quiz_data = _quiz_store.get(request.quiz_id)
+    """저장된 퀴즈를 수동으로 품질 검증한다."""
+    quiz_list = []
+    for qid in request.quiz_ids:
+        data = _quiz_store.get(qid)
+        if not data:
+            raise HTTPException(status_code=404, detail=f"퀴즈 ID '{qid}'를 찾을 수 없습니다.")
+        quiz_list.append({**data, "quiz_id": qid})
 
-    if not quiz_data:
-        raise HTTPException(status_code=404, detail=f"퀴즈 ID '{request.quiz_id}'를 찾을 수 없습니다.")
-
-    result = await eval_agent.run(
-        "퀴즈 평가",
-        {"quiz_data": quiz_data, "topic": request.topic},
-    )
-
-    if isinstance(result["response"], dict) and "error" in result["response"]:
-        raise HTTPException(status_code=500, detail=result["response"]["error"])
-
-    return result
+    results = await evaluate_quiz_list(quiz_list)
+    return {"results": results}
 
 
 # ====== Email Agent Endpoints ======
