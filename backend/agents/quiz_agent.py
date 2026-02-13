@@ -19,6 +19,8 @@ import uuid
 import os
 from typing import Dict, Any, Optional, List
 
+from langsmith import traceable  # LangSmith 트레이싱 데코레이터
+
 # call_llm: Upstage Solar LLM에 프롬프트를 보내고 응답 텍스트를 받는 함수
 from backend.utils.llm import call_llm
 # search_with_filter: ChromaDB에서 메타데이터 필터 조건으로 유사 문서를 검색하는 함수
@@ -168,6 +170,7 @@ class QuizAgent:
                 "metadata": {},
             }
 
+    @traceable(name="quiz_generate", run_type="chain")
     async def _generate_quiz(self, topic: str, difficulty: Optional[str] = None) -> Dict[str, Any]:
         """RAG 검색 → 프롬프트 조립 → LLM 호출 → JSON 파싱 → 저장 순서로 퀴즈 5문제를 생성한다.
 
@@ -252,6 +255,7 @@ class QuizAgent:
             "metadata": {"topic": topic, "difficulty": difficulty, "count": len(quizzes)},
         }
 
+    @traceable(name="quiz_evaluate_answer", run_type="chain")
     def _evaluate_answer(self, quiz_id: str, user_answer: int) -> Dict[str, Any]:
         """사용자가 제출한 답안을 저장된 퀴즈의 정답과 비교하여 채점한다.
 

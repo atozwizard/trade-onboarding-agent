@@ -25,6 +25,8 @@ import json
 import os
 from typing import Dict, Any
 
+from langsmith import traceable  # LangSmith 트레이싱 데코레이터
+
 # call_llm: Upstage Solar LLM에 프롬프트를 보내고 응답 텍스트를 받는 함수
 from backend.utils.llm import call_llm
 # search_with_filter: ChromaDB에서 메타데이터 필터 조건으로 유사 문서를 검색하는 함수
@@ -154,6 +156,7 @@ class EvalAgent:
         topic = context.get("topic", "general")
         return await self.evaluate_quiz(quiz_data, topic)
 
+    @traceable(name="eval_quiz_quality", run_type="chain")
     async def evaluate_quiz(
         self, quiz_data: Dict[str, Any], topic: str = "general"
     ) -> Dict[str, Any]:
