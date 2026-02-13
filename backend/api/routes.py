@@ -38,8 +38,8 @@ async def chat(request: ChatRequest):
         context=request.context
     )
     
-    # The orchestrator_result['response'] is already in the format expected by ChatResponse
-    return ChatResponse(**orchestrator_result['response'])
+    # The orchestrator_result is already in the format expected by ChatResponse
+    return ChatResponse(**orchestrator_result.response.model_dump())
 
 
 @router.post("/quiz/start")

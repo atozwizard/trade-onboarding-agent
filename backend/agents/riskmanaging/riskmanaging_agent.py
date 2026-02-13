@@ -245,7 +245,8 @@ if __name__ == '__main__':
     print(f"\nRunning with UPSTAGE_API_KEY: {'*****' + settings.upstage_api_key[-4:] if settings.upstage_api_key else 'Not Set'}")
     print(f"Langsmith Tracing: {settings.langsmith_tracing and bool(settings.langsmith_api_key)}")
 
-    current_test_history = []
+    current_conversation_history = []
+    current_analysis_in_progress = False
 
     for i, scenario in enumerate(test_scenarios):
         query = scenario["query"]
@@ -254,23 +255,36 @@ if __name__ == '__main__':
         print(f"\n--- Scenario {i+1}: User Query: '{query}' ---")
         
         if not is_follow_up: # Reset history for new main scenarios
-            agent.conversation_history = []
-            agent.analysis_in_progress = False
+            current_conversation_history = []
+            current_analysis_in_progress = False
 
-        result = agent.run(query, {})
+        result = agent.run(query, current_conversation_history, current_analysis_in_progress) # Corrected call
         
-        print(f"Agent Response (type: {result['agent_type']}):")
-        if isinstance(result['response'], str) and result['response'].startswith('{'):
+        # Update conversation state for the next turn
+        current_conversation_history = result["conversation_history"]
+        current_analysis_in_progress = result["analysis_in_progress"]
+        
+        # The 'response' field inside 'result' is a dictionary from model_dump()
+        # So we need to access result['response']['response'] for the actual message.
+        agent_response_payload = result['response'] # This is the model_dump of RiskManagingAgentResponse
+        
+        print(f"Agent Response (type: {agent_response_payload.get('agent_type', 'N/A')}):")
+        response_content = agent_response_payload.get('response', 'No response content.')
+        
+        if isinstance(response_content, str) and response_content.strip().startswith('{'):
             try:
                 # Pretty print JSON responses
-                print(json.dumps(json.loads(result['response']), indent=2, ensure_ascii=False))
+                print(json.dumps(json.loads(response_content), indent=2, ensure_ascii=False))
             except json.JSONDecodeError:
-                print(result['response']) # Print raw if not valid JSON
+                print(response_content) # Print raw if not valid JSON
         else:
-            print(result['response'])
+            print(response_content)
         
-        if result['metadata'].get("conversation_status", {}).get("analysis_ready"):
+        # Access metadata from the agent_response_payload
+        metadata = agent_response_payload.get('metadata', {})
+        
+        if metadata.get("conversation_status", {}).get("analysis_ready"):
             print(">>> Analysis was ready and report should have been generated.")
         
-        if result['metadata'].get("triggered") is not None:
-            print(f"  Metadata: Triggered={result['metadata'].get('triggered')}, Similar={result['metadata'].get('similar')}")
+        if metadata.get("triggered") is not None:
+            print(f"  Metadata: Triggered={metadata.get('triggered')}, Similar={metadata.get('similar')}")

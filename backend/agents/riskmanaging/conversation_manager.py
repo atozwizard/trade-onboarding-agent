@@ -31,6 +31,23 @@ class ConversationManager:
         else:
             os.environ["LANGCHAIN_TRACING_V2"] = "false"
 
+    def _check_analysis_ready(self, extracted_data: Dict[str, Any]) -> bool:
+        score = 0
+
+        if extracted_data.get("contract_amount"):
+            score += 1
+        if extracted_data.get("penalty_info"):
+            score += 1
+        if extracted_data.get("loss_estimate"):
+            score += 1
+        if extracted_data.get("delay_days") or extracted_data.get("delay_risk"):
+            score += 1
+
+        if score >= 3:
+            return True
+        else:
+            return False
+
     @traceable(name="conversation_manager_assess")
     def assess_conversation_progress(self, agent_input: RiskManagingAgentInput) -> Dict[str, Any]:
         """
@@ -75,6 +92,58 @@ class ConversationManager:
             llm_response_content = chat_completion.choices[0].message.content
             
             parsed_response = json.loads(llm_response_content)
+            extracted_data = parsed_response.get("extracted_data", {})
+
+            analysis_ready_calculated = self._check_analysis_ready(extracted_data)
+
+            # Override LLM's analysis_ready with the data-based calculation
+            parsed_response["analysis_ready"] = analysis_ready_calculated
+            
+            # Set additional fields based on analysis_ready_calculated
+            if analysis_ready_calculated:
+                parsed_response["conversation_stage"] = "analysis"
+                parsed_response["analysis_in_progress"] = False
+                parsed_response["analysis_required"] = True
+                parsed_response["status"] = "sufficient" # Ensure status is sufficient if ready
+                parsed_response["message"] = "정보가 충분합니다. 리스크 분석을 시작합니다." # Update message
+                if "follow_up_questions" in parsed_response:
+                    del parsed_response["follow_up_questions"] # Remove follow-up questions if analysis is ready
+            else:
+                # If not ready, ensure these are consistently set for follow-up
+                parsed_response["conversation_stage"] = "gathering_info"
+                parsed_response["analysis_in_progress"] = True # Still gathering info
+                parsed_response["analysis_required"] = False
+                
+                # Dynamically generate follow-up questions for missing fields
+                contract_amount = extracted_data.get("contract_amount")
+                penalty_info = extracted_data.get("penalty_info")
+                loss_estimate = extracted_data.get("loss_estimate")
+                delay_days = extracted_data.get("delay_days")
+                delay_risk = extracted_data.get("delay_risk")
+
+                missing_questions = []
+                if not contract_amount:
+                    missing_questions.append("계약 금액은 얼마입니까?")
+                if not penalty_info:
+                    missing_questions.append("페널티 조항에 대한 정보가 있습니까?")
+                if not loss_estimate:
+                    missing_questions.append("예상 손실액은 얼마입니까?")
+                if not delay_days and not delay_risk:
+                    missing_questions.append("지연 일수 또는 지연 위험에 대한 정보가 있습니까?")
+                
+                # Update follow_up_questions in parsed_response
+                if missing_questions:
+                    parsed_response["follow_up_questions"] = missing_questions
+                    parsed_response["message"] = "리스크 분석을 위해 다음 정보가 필요합니다: " + " ".join(missing_questions)
+                else:
+                    # Fallback message if all fields are extracted but score is < 3
+                    # (This case should ideally not happen if _check_analysis_ready is correctly aligned)
+                    parsed_response["message"] = "아직 정보가 부족합니다. 더 자세한 내용을 알려주시겠습니까?"
+                # The LLM's status and message for insufficient info will be kept
+
+            # Mandatory debug print as per instruction (after all calculations, before return)
+
+            
             return parsed_response
 
         except openai.APIError as e:

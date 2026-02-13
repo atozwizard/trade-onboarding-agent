@@ -53,25 +53,30 @@ class SimilarityEngine:
             return 0.0 # Avoid division by zero
         return np.dot(embedding1, embedding2) / (norm(embedding1) * norm(embedding2))
 
-    def check_similarity(self, user_input: str, threshold: float = 0.87) -> bool:
+    def check_similarity(self, user_input: str, threshold: float = 0.87, return_score: bool = False) -> Any:
         """
         Checks if the user input is similar to any predefined risk type above a given threshold.
+        If return_score is True, returns (bool, float) indicating similarity and the highest score.
+        Otherwise, returns bool.
         """
         if not self.risk_type_embeddings:
             print("Warning: No risk type embeddings available. Similarity check skipped.")
-            return False
+            return (False, 0.0) if return_score else False
 
         user_embedding_list = get_embedding(user_input)
         if not user_embedding_list:
             print("Warning: Could not get embedding for user input. Similarity check skipped.")
-            return False
+            return (False, 0.0) if return_score else False
         user_embedding = np.array(user_embedding_list)
 
+        max_similarity_score = 0.0
         for risk_type_embedding in self.risk_type_embeddings:
             similarity = self.calculate_cosine_similarity(user_embedding, risk_type_embedding)
+            max_similarity_score = max(max_similarity_score, similarity)
             if similarity >= threshold:
-                return True
-        return False
+                return (True, max_similarity_score) if return_score else True
+        
+        return (False, max_similarity_score) if return_score else False
 
     def get_most_similar_risk_type(self, user_input: str) -> Optional[str]:
         """
