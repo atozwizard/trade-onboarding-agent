@@ -6,7 +6,7 @@ ChromaDB를 사용한 DocumentRetriever 구현체.
 import logging
 from typing import List, Dict, Any, Optional
 import chromadb
-from chromadb.config import Settings as ChromaSettings
+import requests
 
 from backend.ports.document_retriever import (
     DocumentRetriever,
@@ -17,6 +17,67 @@ from backend.config import Settings, get_settings
 
 
 logger = logging.getLogger(__name__)
+
+
+class UpstageEmbeddingFunction:
+    """
+    Upstage Solar Embedding Function for ChromaDB
+
+    ChromaDB 검색 시 Upstage API를 사용하여 쿼리를 임베딩.
+    """
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        self.api_url = "https://api.upstage.ai/v1/embeddings"
+        self.model = "embedding-query"
+
+    def name(self) -> str:
+        """ChromaDB가 요구하는 이름 반환"""
+        return "upstage-solar-embedding"
+
+    def __call__(self, input: List[str]) -> List[List[float]]:
+        """
+        ChromaDB가 호출하는 임베딩 함수
+
+        Args:
+            input: 임베딩할 텍스트 리스트
+
+        Returns:
+            List[List[float]]: 각 텍스트에 대한 임베딩 벡터
+        """
+        embeddings = []
+
+        for text in input:
+            try:
+                headers = {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "input": text,
+                    "model": self.model
+                }
+
+                response = requests.post(
+                    self.api_url,
+                    headers=headers,
+                    json=payload,
+                    timeout=10
+                )
+                response.raise_for_status()
+
+                data = response.json()
+                if data and "data" in data and len(data["data"]) > 0:
+                    embedding = data["data"][0]["embedding"]
+                    embeddings.append(embedding)
+                else:
+                    logger.error(f"Unexpected API response: {data}")
+                    raise RetrievalError("Failed to get embedding from Upstage API")
+
+            except Exception as e:
+                logger.error(f"Embedding API call failed: {e}")
+                raise RetrievalError(f"Embedding generation failed: {e}")
+
+        return embeddings
 
 
 class ChromaDocumentRetriever(DocumentRetriever):
@@ -41,15 +102,19 @@ class ChromaDocumentRetriever(DocumentRetriever):
         self._settings = settings
 
         try:
-            # ChromaDB 클라이언트 초기화
-            self._client = chromadb.PersistentClient(
-                path="backend/rag/chroma_db",
-                settings=ChromaSettings(anonymized_telemetry=False)
+            # Upstage Embedding Function 초기화 (쿼리 임베딩용)
+            self._embedding_function = UpstageEmbeddingFunction(
+                api_key=settings.upstage_api_key
             )
 
-            # 컬렉션 로드 (없으면 생성)
+            # ChromaDB 클라이언트 초기화 (rag/chroma_client.py와 동일한 설정)
+            self._client = chromadb.PersistentClient(
+                path="backend/vectorstore"  # 설정 파라미터 제거 (singleton 충돌 방지)
+            )
+
+            # 컬렉션 로드 (embedding function은 지정하지 않음 - 기존 설정 유지)
             self._collection = self._client.get_or_create_collection(
-                name="trade_documents"
+                name="trade_coaching_knowledge"  # rag/chroma_client.py와 동일한 컬렉션명
             )
 
             doc_count = self._collection.count()
@@ -88,11 +153,15 @@ class ChromaDocumentRetriever(DocumentRetriever):
                 where["document_type"] = document_type
             where.update(filters)
 
-            # 검색 실행
-            logger.debug(f"Searching: query='{query[:50]}...', k={k}, where={where}")
+            # 쿼리를 Upstage API로 임베딩
+            logger.debug(f"Embedding query: '{query[:50]}...'")
+            query_embeddings = self._embedding_function([query])
+
+            # 검색 실행 (임베딩 벡터로 직접 검색)
+            logger.debug(f"Searching: k={k}, where={where}")
 
             results = self._collection.query(
-                query_texts=[query],
+                query_embeddings=query_embeddings,
                 n_results=k,
                 where=where if where else None
             )

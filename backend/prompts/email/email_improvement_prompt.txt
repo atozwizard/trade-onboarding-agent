@@ -5,7 +5,9 @@
 # 입력 정보
 - 원본 이메일: {email_content}
 - 발견된 리스크: {risks}
-- 톤 분석 결과: {tone_analysis}
+- 현재 톤: {current_tone} (점수: {tone_score}/10)
+- 권장 톤: {recommended_tone}
+- 톤 문제점: {tone_issues}
 - 참고 우수 이메일: {retrieved_emails}
 
 # 개선 원칙
@@ -62,7 +64,7 @@ Best regards,
 
 1. **마크다운 없음**: 순수 이메일 텍스트만 출력 (### 같은 마크다운 헤더 사용 금지)
 2. **모든 리스크 해결**: 입력된 리스크를 하나도 남기지 않음
-3. **톤 권장사항 반영**: tone_analysis의 recommended_tone 적용
+3. **톤 권장사항 반영**: {recommended_tone} 톤 적용
 4. **[ ] 플레이스홀더 사용**: 사용자가 채워야 할 부분은 [Name], [Date] 등으로 표시
 5. **출처 기반**: retrieved_emails의 실제 표현 활용
 
@@ -71,7 +73,8 @@ Best regards,
 입력:
 - 원본: "Hi, send me 100 units quickly."
 - 리스크: payment_terms 누락, aggressive tone
-- 톤 분석: aggressive → professional
+- 현재 톤: aggressive (점수: 3/10)
+- 권장 톤: professional
 - 수신자 국가: Japan
 
 출력:
