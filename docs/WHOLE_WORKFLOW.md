@@ -49,36 +49,36 @@
 
 ```mermaid
 graph TD
-    A[Streamlit Frontend] -->|User Input, Session ID| B(FastAPI /chat Endpoint);
-    B -->|session_id, user_input, context| C(Orchestrator.run());
-    C -->|Manage Session State, Route Intent| D{Agent Routing Logic};
+    A[Streamlit Frontend] -->|User Input, Session ID| B(FastAPI /chat Endpoint)
+    B -->|session_id, user_input, context| C[Orchestrator_Run]
+    C -->|Manage Session State, Route Intent| D{Agent Routing Logic}
 
-    D -->|Active Agent, Frontend Context| E[RiskManagingAgent];
-    D -->|Trigger Words, Semantic Similarity| E;
-    D -->|Fallback| F[DefaultChatAgent];
+    D -->|Active Agent, Frontend Context| E[RiskManagingAgent]
+    D -->|Trigger Words, Semantic Similarity| E
+    D -->|Fallback| F[DefaultChatAgent]
 
-    E -->|User Input, History| G(RiskManagingAgent.run());
-    G --> H{ConversationManager<br/>(analysis_ready?)};
-    H -->|No, needs more info| G;
-    H -->|Yes, analysis_ready| I(RAGConnector);
+    E -->|User Input, History| G[RiskManagingAgent_Run]
+    G --> H{ConversationManager<br/>analysis_ready?}
+    H -->|No, needs more info| G
+    H -->|Yes, analysis_ready| I[RAGConnector]
     
-    I -->|query, history| J(backend.rag.retriever.search());
-    J --> K(backend.rag.embedder.get_embedding);
-    K --> L(ChromaDB Vector Store);
-    L --> J;
-    J -->|Retrieved Docs| I;
-    I -->|Filtered Docs| G;
+    I -->|query, history| J[RAG_Retriever_Search]
+    J --> K[RAG_Embedder_Get_Embedding]
+    K --> L[ChromaDB_Vector_Store]
+    L --> J
+    J -->|Retrieved Docs| I
+    I -->|Filtered Docs| G
 
-    G --> M(RiskEngine);
-    G --> N(ReportGenerator);
-    N --> O(LLM Calls for Report Sections);
-    O --> N;
-    N -->|RiskReport Object| G;
+    G --> M[RiskEngine]
+    G --> N[ReportGenerator]
+    N --> O[LLM_Calls_For_Report_Sections]
+    O --> N
+    N -->|RiskReport Object| G
 
-    G -->|JSON RiskReport, analysis_in_progress=False| C;
-    F -->|Chat Response| C;
-    C -->|ChatResponse Object| B;
-    B -->|Render Response| A;
+    G -->|JSON RiskReport, analysis_in_progress=False| C
+    F -->|Chat Response| C
+    C -->|ChatResponse Object| B
+    B -->|Render Response| A
 ```
 
 ---

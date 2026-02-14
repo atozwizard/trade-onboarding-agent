@@ -62,47 +62,48 @@
 
 ## 4. Mermaid graph
 
-```mermaid
 graph TD
-    subgraph Orchestrator Call
-        Start([User Input from Orchestrator]) --> A[RiskManagingAgent.run()];
+    subgraph Orchestrator_Call [Orchestrator Call]
+        Start([User Input from Orchestrator]) --> A[RiskManagingAgent.run]
     end
 
-    subgraph RiskManagingAgent Internal Workflow
-        A --> B{Is triggered or similar? OR Analysis in progress?};
-        B -- No --> C[Passthrough to Default (ends analysis)];
-        B -- Yes --> D[Set analysis_in_progress = True];
+    subgraph RiskManagingAgent_Internal [RiskManagingAgent Internal Workflow]
+        A --> B{Is triggered or similar? <br/>OR Analysis in progress?}
+        B -- No --> C[Passthrough to Default]
+        B -- Yes --> D[Set analysis_in_progress = True]
 
-        D --> E[ConversationManager.assess_conversation_progress()];
-        E --> F{analysis_ready? (Enough info collected?)};
-        F -- No --> G[Generate Follow-up Questions];
-        G --> H[Return response with follow-up, analysis_in_progress=True];
-        F -- Yes --> I[RAGConnector.get_risk_documents()];
+        D --> E[ConversationManager.assess_conversation_progress]
+        E --> F{analysis_ready? <br/>Enough info collected?}
         
-        I --> J[backend.rag.retriever.search()];
-        J --> K[Filter RAG docs by RAG_DATASETS];
-        K --> L[Extract Similar Cases & Evidence];
-        L --> M[RiskEngine.evaluate_risk()];
-        M --> N[ReportGenerator.generate_report()];
-        N --> O[Return JSON RiskReport, analysis_in_progress=False];
+        F -- No --> G[Generate Follow-up Questions]
+        G --> H[Return follow-up response]
+        
+        F -- Yes --> I[RAGConnector.get_risk_documents]
+        I --> J[backend.rag.retriever.search]
+        J --> K[Filter RAG docs by RAG_DATASETS]
+        K --> L[Extract Similar Cases & Evidence]
+        L --> M[RiskEngine.evaluate_risk]
+        M --> N[ReportGenerator.generate_report]
+        N --> O[Return JSON RiskReport <br/>Set analysis_in_progress = False]
     end
 
-    C --> End([To Orchestrator/Default Agent]);
-    H --> End;
-    O --> End;
+    C --> End([To Orchestrator/Default Agent])
+    H --> End
+    O --> End
 
-    style A fill:#f9f,stroke:#333,stroke-width:2px;
-    style B fill:#add8e6,stroke:#333,stroke-width:2px;
-    style C fill:#ffe4e1,stroke:#333,stroke-width:2px;
-    style D fill:#90ee90,stroke:#333,stroke-width:2px;
-    style E fill:#add8e6,stroke:#333,stroke-width:2px;
-    style F fill:#add8e6,stroke:#333,stroke-width:2px;
-    style G fill:#f0e68c,stroke:#333,stroke-width:2px;
-    style H fill:#90ee90,stroke:#333,stroke-width:2px;
-    style I fill:#add8e6,stroke:#333,stroke-width:2px;
-    style J fill:#add8e6,stroke:#333,stroke-width:2px;
-    style K fill:#add8e6,stroke:#333,stroke-width:2px;
-    style L fill:#add8e6,stroke:#333,stroke-width:2px;
-    style M fill:#add8e6,stroke:#333,stroke-width:2px;
-    style N fill:#add8e6,stroke:#333,stroke-width:2px;
-    style O fill:#f0e68c,stroke:#333,stroke-width:2px;
+    %% 스타일 설정
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style B fill:#add8e6,stroke:#333,stroke-width:2px
+    style C fill:#ffe4e1,stroke:#333,stroke-width:2px
+    style D fill:#90ee90,stroke:#333,stroke-width:2px
+    style E fill:#add8e6,stroke:#333,stroke-width:2px
+    style F fill:#add8e6,stroke:#333,stroke-width:2px
+    style G fill:#f0e68c,stroke:#333,stroke-width:2px
+    style H fill:#90ee90,stroke:#333,stroke-width:2px
+    style I fill:#add8e6,stroke:#333,stroke-width:2px
+    style J fill:#add8e6,stroke:#333,stroke-width:2px
+    style K fill:#add8e6,stroke:#333,stroke-width:2px
+    style L fill:#add8e6,stroke:#333,stroke-width:2px
+    style M fill:#add8e6,stroke:#333,stroke-width:2px
+    style N fill:#add8e6,stroke:#333,stroke-width:2px
+    style O fill:#f0e68c,stroke:#333,stroke-width:2px
