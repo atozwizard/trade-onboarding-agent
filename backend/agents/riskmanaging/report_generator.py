@@ -84,22 +84,22 @@ class ReportGenerator:
             # 5. Generate confidence_score
             confidence_score = self._generate_confidence_score(risk_scoring, rag_documents)
 
-            # Consolidate risk factors into a dictionary
+            # Consolidate risk factors into a dictionary of ReportRiskFactor objects for frontend display
             risk_factors_dict = {}
-            for i, rf in enumerate(risk_scoring.risk_factors):
-                key = rf.factor_id or rf.name or f"risk_{i+1}"
-                risk_factors_dict[key] = {
-                    "name_kr": rf.name_kr or rf.name,
-                    "impact": rf.impact,
-                    "likelihood": rf.likelihood,
-                    "score": rf.risk_score # Mapping risk_score from schema to 'score' for frontend
-                }
+            for rf in risk_scoring.risk_factors:
+                key = rf.name # Use rf.name as the key for the dictionary
+                risk_factors_dict[key] = ReportRiskFactor(
+                    name_kr=rf.name, # Use rf.name as name_kr
+                    impact=rf.impact,
+                    likelihood=rf.likelihood,
+                    score=rf.risk_score # Map rf.risk_score to score
+                )
 
             # Construct the final report data structure
             final_report_model = RiskReport(
                 analysis_id=str(uuid.uuid4()), # Generate new ID here
                 input_summary=input_summary,
-                risk_factors=risk_factors_dict, # Pass the dictionary here
+                risk_factors=risk_factors_dict, # Pass the dictionary of ReportRiskFactor here
                 risk_scoring=risk_scoring,
                 loss_simulation=loss_simulation,
                 control_gap_analysis=control_gap_analysis,

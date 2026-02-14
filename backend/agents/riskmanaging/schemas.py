@@ -37,11 +37,19 @@ class PreventionStrategy(BaseModel):
     short_term: List[str] = Field(..., description="단기 예방 전략")
     long_term: List[str] = Field(..., description="장기 예방 전략")
 
+# --- Report Risk Factor (for frontend display) ---
+class ReportRiskFactor(BaseModel):
+    name_kr: str = Field(..., description="리스크 요인 한국어 이름")
+    impact: int = Field(..., ge=1, le=5, description="영향도 (1-5)")
+    likelihood: int = Field(..., ge=1, le=5, description="발생 가능성 (1-5)")
+    score: int = Field(..., ge=1, le=25, description="리스크 점수 (Impact * Likelihood)") # 'score' to match frontend expectation
+
+
 # --- Final Report Output ---
 class RiskReport(BaseModel):
     analysis_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="리스크 분석 고유 ID")
     input_summary: str = Field(..., description="사용자 질의 및 컨텍스트 요약")
-    risk_factors: List[str] = Field(..., description="식별된 주요 리스크 요인들을 요약 (단어/구 형태)")
+    risk_factors: Dict[str, ReportRiskFactor] = Field(..., description="식별된 주요 리스크 요인들을 {name: ReportRiskFactor} 형태로 요약")
     risk_scoring: RiskScoring = Field(..., description="전반적인 리스크 점수화 및 수준")
     loss_simulation: LossSimulation = Field(..., description="예상 손실 시뮬레이션")
     control_gap_analysis: ControlGapAnalysis = Field(..., description="리스크 관리 체계 허점 분석")

@@ -10,8 +10,11 @@ project_root = os.path.abspath(os.path.join(current_dir, '..', '..', '..')) # Go
 sys.path.append(project_root)
 
 from backend.config import get_settings
-from backend.rag.retriever import search as rag_search
+from backend.rag.retriever import search_with_filter # Changed import
 from backend.agents.riskmanaging.config import RAG_DATASETS
+
+# Constant for number of results per filtered search
+DEFAULT_RAG_K_PER_TYPE = 3 # Retrieve 3 documents for each RAG_DATASET type
 
 class RAGConnector:
     def __init__(self):
@@ -23,6 +26,8 @@ class RAGConnector:
         """
         Retrieves relevant documents from the RAG system based on the query and conversation history.
         Filters by predefined risk management datasets.
+        
+        This now iterates through RAG_DATASETS and calls search_with_filter for each.
 
         Args:
             query (str): The current user query.
@@ -37,15 +42,28 @@ class RAGConnector:
             full_query_context = f"{history_str}\nUser: {query}"
         
         retrieved_documents = []
-        try:
-            rag_results = rag_search(query=full_query_context, k=5)
+        unique_docs = set() # To store unique document contents and avoid duplicates
 
-            if rag_results:
-                for doc in rag_results:
-                    source_dataset = doc['metadata'].get('source_dataset')
-                    # Only append if the source_dataset is in our RAG_DATASETS config (without .json extension)
-                    if source_dataset and source_dataset.replace('.json', '') in RAG_DATASETS:
-                        retrieved_documents.append(doc)
+        try:
+            # Iterate through the RAG_DATASETS defined in config and filter by document_type
+            for doc_type_filter in RAG_DATASETS:
+                print(f"RAGConnector: Searching with document_type='{doc_type_filter}' for query: {full_query_context[:50]}...")
+                # Use search_with_filter instead of search
+                rag_results_for_type = search_with_filter(
+                    query=full_query_context, 
+                    k=DEFAULT_RAG_K_PER_TYPE, 
+                    document_type=doc_type_filter
+                )
+
+                if rag_results_for_type:
+                    for doc in rag_results_for_type:
+                        # Add only if not already in the list (based on document content)
+                        doc_content = doc.get('document')
+                        if doc_content and doc_content not in unique_docs:
+                            retrieved_documents.append(doc)
+                            unique_docs.add(doc_content)
+                
+            print(f"RAGConnector: Retrieved {len(retrieved_documents)} unique documents after filtering by RAG_DATASETS.")
 
         except Exception as e:
             print(f"An error occurred during RAG search in RAGConnector: {e}")
@@ -72,6 +90,7 @@ class RAGConnector:
                 })
             
             source_info = metadata.get('source_dataset', 'Unknown Source')
+            # Ensure unique source info
             if source_info not in evidence_sources:
                 evidence_sources.append(source_info)
                 

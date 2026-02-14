@@ -39,7 +39,7 @@ async def chat(request: ChatRequest):
     )
     
     # The orchestrator_result is already in the format expected by ChatResponse
-    return ChatResponse(**orchestrator_result.response.model_dump())
+    return ChatResponse(**orchestrator_result["response"])
 
 
 @router.post("/quiz/start")

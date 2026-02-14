@@ -1,0 +1,5 @@
+# STEP 완료 보고: STEP 2 — riskmanaging_agent 검증 및 시각화
+
+**STEP 2가 성공적으로 완료되었습니다.** `docs/riskmanaging_workflow.md` 및 `docs/riskmanaging_agent_REPORT.md` 파일이 생성되었습니다.
+
+이제 다음 단계인 **STEP 3 — orchestrator 구조 검증**을 진행합니다.

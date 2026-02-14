@@ -12,22 +12,33 @@ from langsmith import traceable
 # current_dir is backend/agents/, need to reach project root (..)
 # or for modules like backend.rag.embedder (../rag)
 current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_dir, '..', '..', '..'))
-sys.path.insert(0, project_root)
+project_root = os.path.abspath(os.path.join(current_dir, '..', '..'))
+sys.path.append(project_root)
 
+
+# --- Prompt Loader Function ---
+def _load_prompt(prompt_file_name: str) -> str:
+    """
+    Loads a prompt text from the specified file name.
+    Assumes prompt files are in backend/prompts/ relative to the project root.
+    """
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(current_dir, '..', '..'))
+    prompt_path = os.path.join(project_root, 'backend', 'prompts', prompt_file_name)
+    
+    if not os.path.exists(prompt_path):
+        raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+        
+    with open(prompt_path, 'r', encoding='utf-8') as f:
+        return f.read()
 
 # --- Imports for Orchestrator Logic ---
 from backend.config import get_settings
-from backend.rag.embedder import get_embedding # For orchestrator's similarity engine
-from backend.agents.riskmanaging.trigger_detector import detect_risk_trigger # For orchestrator's intent detection
-from backend.agents.riskmanaging.similarity_engine import SimilarityEngine # Re-using for orchestrator's intent detection
 
 # --- Agent Imports ---
 from backend.agents.riskmanaging.riskmanaging_agent import RiskManagingAgent
-# from backend.agents.quiz_agent import QuizAgent # Placeholder for other agents
-# from backend.agents.email_agent import EmailAgent
-# from backend.agents.mistake_agent import MistakeAgent
-# from backend.agents.ceo_agent import CEOAgent
+from backend.agents.quiz_agent import QuizAgent 
+from backend.agents.email_agent import EmailAgent
 
 
 # --- In-Memory Conversation Store (Moved from deleted backend/conversation_store.py) ---
@@ -76,27 +87,14 @@ class DefaultChatAgent:
         }
 
 
-# --- Orchestrator's Agent Routing Configuration (Moved from deleted orchestrator_config.py) ---
+# --- Orchestrator's Agent Routing Configuration ---
 AGENT_CLASS_MAPPING: Dict[str, Type[Any]] = {
     "riskmanaging": RiskManagingAgent,
+    "quiz": QuizAgent, 
+    "email": EmailAgent,
     "default_chat": DefaultChatAgent, # Register default chat agent
-    # "quiz": QuizAgent, # Add other agents here
-    # "email": EmailAgent,
-    # "mistake": MistakeAgent,
-    # "ceo": CEOAgent,
 }
 
-ORCHESTRATOR_AGENT_TRIGGER_MAP = {
-    "riskmanaging": [
-        "실수", "클레임", "지연", "문제", "리스크", "페널티", "손실", "위험", "긴급", "대응", "계약 위반", "계약"
-    ],
-    # "quiz": ["퀴즈", "문제", "학습", "테스트", "시험"],
-    # "email": ["메일", "이메일", "작성", "보내기", "피드백"],
-    # "mistake": ["실수", "오류", "예측", "방지", "가이드", "조심"],
-    # "ceo": ["보고", "대표님", "CEO", "발표", "브리핑"],
-}
-
-ORCHESTRATOR_SIMILARITY_THRESHOLD = 0.82
 DEFAULT_AGENT_NAME = "default_chat"
 
 
@@ -110,7 +108,18 @@ class Orchestrator:
     def __init__(self):
         self.settings = get_settings()
         self.conversation_store = InMemoryConversationStore()
-        self.similarity_engine = SimilarityEngine() # Re-using existing similarity engine
+        
+        # Initialize LLM client for intent classification
+        if not self.settings.upstage_api_key:
+            print("Warning: UPSTAGE_API_KEY is not set. LLM calls for Orchestrator intent classification will fail.")
+            self.llm = None
+        else:
+            self.llm = OpenAI(
+                base_url="https://api.upstage.ai/v1",
+                api_key=self.settings.upstage_api_key
+            )
+        
+        self.orchestrator_intent_prompt = _load_prompt("orchestrator_intent_prompt.txt")
 
         self.agents: Dict[str, Any] = {}
         self._initialize_agents()
@@ -129,84 +138,75 @@ class Orchestrator:
             self.agents[agent_name] = agent_class()
             print(f"Orchestrator initialized agent: {agent_name}")
 
+    def _classify_intent_with_llm(self, user_input: str) -> str:
+        """
+        Classifies the user's intent using an LLM.
+        """
+        if not self.llm:
+            print("LLM client not initialized. Falling back to default.")
+            return DEFAULT_AGENT_NAME
+        
+        try:
+            messages = [
+                {"role": "system", "content": self.orchestrator_intent_prompt.format(user_input="")},
+                {"role": "user", "content": self.orchestrator_intent_prompt.format(user_input=user_input)}
+            ]
+            response = self.llm.chat.completions.create(
+                model="solar-pro2",
+                messages=messages,
+                temperature=0.1,
+                response_format={"type": "json_object"}
+            ).choices[0].message.content
+            
+            parsed_response = json.loads(response)
+            agent_type = parsed_response.get("agent_type", DEFAULT_AGENT_NAME)
+            reason = parsed_response.get("reason", "LLM based classification.")
+            print(f"LLM classified intent: {agent_type} (Reason: {reason})")
+            return agent_type
+
+        except Exception as e:
+            print(f"Error during LLM intent classification: {e}. Falling back to default.")
+            return DEFAULT_AGENT_NAME
+
     def _detect_intent_and_route(self, user_input: str, current_session_state: Dict[str, Any], context: Dict[str, Any]) -> str:
         """
         Detects the user's intent and decides which agent should handle the request.
-        Prioritizes existing active agent, then explicit mode, then trigger words,
-        then semantic similarity, finally falling back to default.
+        Prioritizes existing active agent, then explicit mode, then LLM-based classification.
         """
-        # Initialize debug tracking variables
-        matched_trigger = None
-        similarity_score = None
-        selected_agent = None # To be updated as routing progresses
-
-        # DEBUG: Initial routing state
-        print("ROUTING INPUT:", user_input)
-        
-        # 1. Explicit mode from frontend context (e.g., for dedicated buttons/flows)
-        if context.get("mode") and context["mode"] in self.agents:
-            selected_agent = context["mode"]
-            print(f"Orchestrator routing overridden by frontend context.mode to {selected_agent}")
-            # FINAL DEBUG LOGS (Mandatory - requested by user)
-            print("TRIGGER MATCH:", matched_trigger)
-            print("SIMILARITY:", similarity_score)
-            print("FINAL ROUTE:", selected_agent)
-            return selected_agent
-
-        # 2. Trigger word detection for initial routing (FIX 3 will modify this block)
-        # We need to extract the trigger word detection logic to a separate helper or integrate with the loop.
-        # For now, let's keep it in loop and modify the condition.
-        for agent_name, trigger_words in ORCHESTRATOR_AGENT_TRIGGER_MAP.items():
-            if agent_name in self.agents: # Ensure agent is initialized
-                for word in trigger_words:
-                    if word in user_input: # FIX 3: Removed .lower() and in .lower()
-                        selected_agent = agent_name
-                        matched_trigger = word # Store for debug log
-                        print(f"Orchestrator routed by trigger word '{word}' to {selected_agent}")
-                        # FINAL DEBUG LOGS (Mandatory - requested by user)
-                        print("TRIGGER MATCH:", matched_trigger)
-                        print("SIMILARITY:", similarity_score)
-                        print("FINAL ROUTE:", selected_agent)
-                        return selected_agent
-
-        # 3. Semantic similarity for initial routing
-        # Check if self.similarity_engine.check_similarity supports return_score
-        # For now, assume it returns a boolean. We will fetch score explicitly if needed.
-        # If the user input is similar enough to risk-related topics, route to riskmanaging
-        if "riskmanaging" in self.agents:
-            # check_similarity now returns (is_similar, score)
-            is_similar_to_risk, score = self.similarity_engine.check_similarity(user_input, ORCHESTRATOR_SIMILARITY_THRESHOLD, return_score=True)
-            similarity_score = score
-            if is_similar_to_risk:
-                selected_agent = "riskmanaging"
-                print(f"Orchestrator routed by semantic similarity to {selected_agent} (Score: {similarity_score:.2f})")
-                # FINAL DEBUG LOGS (Mandatory - requested by user)
-                print("TRIGGER MATCH:", matched_trigger)
-                print("SIMILARITY:", similarity_score)
-                print("FINAL ROUTE:", selected_agent)
-                return selected_agent
-            
-        # 4. Active agent continuation (FIX 1: Only for riskmanaging if analysis_in_progress)
+        # 1. Prioritize active agent in session state
         active_agent_name = current_session_state.get("active_agent")
-        if active_agent_name == "riskmanaging": # FIX 1: Only lock if risk analysis is in progress
+        if active_agent_name and active_agent_name in self.agents:
+            # Check if the active agent is still "in progress"
             agent_specific_state = current_session_state.get("agent_specific_state", {})
-            if agent_specific_state.get("analysis_in_progress"):
-                selected_agent = "riskmanaging"
-                print("Continuing riskmanaging (analysis in progress)")
-                # FINAL DEBUG LOGS (Mandatory - requested by user)
-                print("TRIGGER MATCH:", matched_trigger)
-                print("SIMILARITY:", similarity_score)
-                print("FINAL ROUTE:", selected_agent)
-                return selected_agent
+            if active_agent_name == "riskmanaging": # Only riskmanaging agent manages 'analysis_in_progress' state
+                if agent_specific_state.get("analysis_in_progress"):
+                    print(f"Orchestrator continuing with active agent: {active_agent_name} (analysis in progress)")
+                    return active_agent_name
+            # For other agents, if they are active, continue with them if they need multi-turn support.
+            # For now, other agents are assumed to be single-turn unless they explicitly set active_agent for multi-turn.
+            # Since RiskManagingAgent explicitly clears 'active_agent' when done, this logic is sound.
+            else:
+                print(f"Orchestrator continuing with active agent: {active_agent_name}")
+                return active_agent_name
+        
+        # 2. Explicit mode from frontend context (e.g., for dedicated buttons/flows)
+        if context.get("mode") and context["mode"] in self.agents:
+            print(f"Orchestrator routing overridden by frontend context.mode to {context['mode']}")
+            return context["mode"]
 
-        # 5. Fallback to default agent
-        selected_agent = DEFAULT_AGENT_NAME
-        print(f"Orchestrator routed to default agent: {selected_agent}")
-        # FINAL DEBUG LOGS (Mandatory - requested by user)
-        print("TRIGGER MATCH:", matched_trigger)
-        print("SIMILARITY:", similarity_score)
-        print("FINAL ROUTE:", selected_agent)
-        return selected_agent
+        # 3. LLM-based intent classification
+        llm_predicted_agent_type = self._classify_intent_with_llm(user_input)
+        
+        # Map 'out_of_scope' to 'default_chat' for actual agent execution
+        if llm_predicted_agent_type == "out_of_scope":
+            print(f"LLM classified intent as 'out_of_scope'. Routing to {DEFAULT_AGENT_NAME}.")
+            return DEFAULT_AGENT_NAME # out_of_scope is a type of default response, not an agent
+        elif llm_predicted_agent_type in AGENT_CLASS_MAPPING:
+            print(f"Orchestrator routed by LLM intent classification to {llm_predicted_agent_type}")
+            return llm_predicted_agent_type
+        else:
+            print(f"LLM predicted unknown agent type '{llm_predicted_agent_type}'. Falling back to default.")
+            return DEFAULT_AGENT_NAME
 
     @traceable(name="orchestrator_run_main")
     def run(self, session_id: str, user_input: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -224,14 +224,9 @@ class Orchestrator:
         """
         if context is None:
             context = {}
-        
-        # DEBUG LOGS (Mandatory - requested by user)
-        print("DEBUG user_input:", user_input)
-        
+
         # 1. Load session state
         session_state = self.conversation_store.get_state(session_id)
-        print("DEBUG active_agent:", session_state.get("active_agent") if session_state else None)
-        print("DEBUG context.mode:", context.get("mode"))
         if not session_state:
             session_state = {
                 "active_agent": None,
@@ -245,7 +240,6 @@ class Orchestrator:
 
 
         # 2. Detect intent and route to agent
-        print("DEBUG trigger check start") # Mandatory debug log
         target_agent_name = self._detect_intent_and_route(user_input, session_state, context)
         
         # If switching agents, reset relevant parts of state for the new agent
@@ -268,32 +262,53 @@ class Orchestrator:
             session_state["active_agent"] = None # Reset active agent if it failed
             session_state["last_interaction_timestamp"] = time.time()
             self.conversation_store.save_state(session_id, session_state)
-            return response_payload
-
+            return {
+                "response":response_payload
+                }
+        
 
         # 3. Prepare agent-specific state and call agent
-        # All agents now expect conversation_history and return updated one.
-        # They also return whether they are still 'analysis_in_progress' or similar flags.
-        
         current_agent_history = session_state.get("conversation_history", [])
         current_agent_specific_state = session_state.get("agent_specific_state", {})
-
-        # RiskManagingAgent expects analysis_in_progress
         analysis_in_progress_flag = current_agent_specific_state.get("analysis_in_progress", False)
-        
-        # Generic call for all agents
-        agent_output = agent_instance.run(
-            user_input=user_input,
-            conversation_history=current_agent_history,
-            analysis_in_progress=analysis_in_progress_flag, # Pass if needed, agent can ignore if not applicable
-            context=context
-        )
-        
-        # Extract results from agent_output (expected format from stateless agents)
-        response_payload = agent_output.get("response", {"response": "에이전트 응답 오류", "agent_type": agent_instance.agent_type, "metadata": {}})
-        updated_agent_history = agent_output.get("conversation_history", current_agent_history)
-        updated_analysis_in_progress = agent_output.get("analysis_in_progress", False)
 
+        agent_output = {}
+        updated_agent_history = current_agent_history # Default, will be updated by agent if multi-turn
+        updated_analysis_in_progress = False # Default, will be updated by agent if multi-turn
+
+        if target_agent_name == "riskmanaging":
+            # RiskManagingAgent expects conversation_history, analysis_in_progress, context
+            agent_output = agent_instance.run(
+                user_input=user_input,
+                conversation_history=current_agent_history,
+                analysis_in_progress=analysis_in_progress_flag,
+                context=context
+            )
+            updated_agent_history = agent_output.get("conversation_history", current_agent_history)
+            updated_analysis_in_progress = agent_output.get("analysis_in_progress", False)
+        elif target_agent_name in ["quiz", "email", "default_chat"]: # For other agents like QuizAgent, EmailAgent, DefaultChatAgent
+            # These agents (Quiz, Email, DefaultChat) expect only user_input and context.
+            # They are currently designed as single-turn, stateless agents by the orchestrator.
+            # orchestrator maintains conversation history for them.
+            # The 'run' method for these agents does NOT return conversation_history or analysis_in_progress.
+            agent_output = agent_instance.run(
+                user_input=user_input,
+                context=context # Agents like Email and Quiz expect context, not full history
+            )
+            response_content_for_history = agent_output.get("response", {}).get("response", "")
+            updated_agent_history = current_agent_history + [{"role": "User", "content": user_input}, {"role": "Agent", "content": response_content_for_history}]
+            updated_analysis_in_progress = False # Explicitly false for these agents
+        else: # Fallback for any unhandled agent types or errors (e.g., from LLM classification)
+            response_content = f"죄송합니다. 현재 '{target_agent_name}' 에이전트의 응답을 처리할 수 없습니다."
+            agent_output = {
+                "response": {"response": response_content, "agent_type": self.orchestrator_type, "metadata": {"reason": "Unhandled agent type"}},
+                "conversation_history": current_agent_history + [{"role": "User", "content": user_input}, {"role": "Agent", "content": response_content}],
+                "analysis_in_progress": False
+            }
+
+
+        # Extract results from agent_output (expected format from agents)
+        response_payload = agent_output.get("response", {"response": "에이전트 응답 오류", "agent_type": self.orchestrator_type, "metadata": {}})
 
         # 4. Update and Save Session State
         session_state["conversation_history"] = updated_agent_history
@@ -308,10 +323,9 @@ class Orchestrator:
         self.conversation_store.save_state(session_id, session_state)
 
         return {
-            "response": response_payload,
-            "conversation_history": updated_agent_history,
-            "analysis_in_progress": updated_analysis_in_progress
+            "response":response_payload # This is the dict directly consumable by FastAPI ChatResponse
         }
+
 
 if __name__ == '__main__':
     # Test Orchestrator with RiskManagingAgent and DefaultChatAgent
@@ -324,22 +338,64 @@ if __name__ == '__main__':
     print("--- Orchestrator Test Sequence ---")
     orchestrator = Orchestrator()
     
-    # Minimal test for default chat
-    print("\n--- Test 1: Default Chat ---")
-    session_id_default = "test_default_session"
-    user_input_default = "안녕하세요, 날씨가 좋네요."
-    result_default = orchestrator.run(session_id_default, user_input_default)
-    print(f"  Response: {result_default['response']['response']}")
-    assert result_default['response']['agent_type'] == "default_chat"
-    assert "안녕하세요" in result_default['response']['response']
+    test_scenarios = [
+        # Scenario 1: Default Chat (LLM-classified)
+        {"session_id": "test_session_1", "query": "안녕하세요, 날씨가 좋네요.", "expected_agent": "default_chat"},
+        
+        # Scenario 2: Risk Managing - Direct query (LLM-classified)
+        {"session_id": "test_session_2", "query": "해외 거래처로부터 선적이 1주일 지연될 것 같다고 통보받았습니다. 계약서상 3일 이상 지연 시 일당 1% 페널티가 있습니다. 어떻게 대응해야 할까요?", "expected_agent": "riskmanaging", "expect_report": True},
+        
+        # Scenario 3: Risk Managing - Multi-turn
+        {"session_id": "test_session_3", "query": "신규 프로젝트 진행 중에 문제가 발생했습니다.", "expected_agent": "riskmanaging", "expect_follow_up": True},
+        {"session_id": "test_session_3", "query": "납기 지연과 품질 이슈가 동시에 발생했습니다. 계약 위반 가능성도 있습니다.", "expected_agent": "riskmanaging", "expect_follow_up": True},
+        {"session_id": "test_session_3", "query": "A사와의 10만 달러 규모 계약이고, 5일 이상 지연 시 일당 1%의 페널티가 있습니다. 예상 손실액은 5천 달러입니다.", "expected_agent": "riskmanaging", "expect_report": True},
+        
+        # Scenario 4: Risk Managing -> Default Chat (after completion)
+        {"session_id": "test_session_4", "query": "지금 리스크 분석 해줘", "expected_agent": "riskmanaging", "expect_follow_up": True},
+        {"session_id": "test_session_4", "query": "납기 지연과 예상 손실액은 1000만원입니다.", "expected_agent": "riskmanaging", "expect_report": True},
+        {"session_id": "test_session_4", "query": "오늘 날씨 어때?", "expected_agent": "default_chat"}, # Should switch to default
 
-    # Minimal test for riskmanaging trigger
-    print("\n--- Test 2: RiskManaging Trigger ---")
-    session_id_risk = "test_risk_session"
-    user_input_risk = "계약에 리스크가 있습니다."
-    result_risk = orchestrator.run(session_id_risk, user_input_risk)
-    print(f"  Response: {result_risk['response']['response']}")
-    assert result_risk['response']['agent_type'] == "riskmanaging"
-    assert result_risk['analysis_in_progress'] == True
+        # Scenario 5: Explicit mode override (frontend context)
+        {"session_id": "test_session_5", "query": "아무거나 말해줘.", "context": {"mode": "riskmanaging"}, "expected_agent": "riskmanaging", "expect_follow_up": True},
 
-    print("\n--- All basic orchestrator tests passed. ---")
+        # Scenario 6: Quiz Agent (LLM-classified)
+        {"session_id": "test_session_6", "query": "무역 용어 퀴즈 내줘.", "expected_agent": "quiz"},
+        
+        # Scenario 7: New - Email Agent
+        {"session_id": "test_session_7", "query": "고객에게 선적 지연 사과 이메일 초안 작성해줘.", "expected_agent": "email"},
+
+        # Scenario 8: New - Out of Scope
+        {"session_id": "test_session_8", "query": "오늘 저녁 메뉴 추천해줘.", "expected_agent": "out_of_scope"},
+    ]
+
+    for scenario in test_scenarios:
+        s_id = scenario["session_id"]
+        query = scenario["query"]
+        context = scenario.get("context", {})
+        
+        print(f"\n--- Session: {s_id}, User Input: '{query}' ---")
+        result = orchestrator.run(s_id, query, context)
+        
+        print(f"  Orchestrator Response Agent Type: {result['response']['agent_type']}") # Access agent_type from payload
+        print(f"  Orchestrator Response: {result['response']['response'][:100]}...")
+        
+        # Verify active agent in session store
+        current_session_state = orchestrator.conversation_store.get_state(s_id)
+        if current_session_state:
+            print(f"  Current active agent in store: {current_session_state.get('active_agent')}")
+            print(f"  Analysis in progress in store: {current_session_state.get('agent_specific_state', {}).get('analysis_in_progress')}")
+        
+        # Basic assertions
+        # Note: LLM classification for out_of_scope is handled as default_chat by orchestrator now
+        expected_agent_for_assertion = "default_chat" if scenario['expected_agent'] == "out_of_scope" else scenario['expected_agent']
+
+        assert result['response']['agent_type'] == expected_agent_for_assertion, \
+               f"Expected agent {expected_agent_for_assertion}, got {result['response']['agent_type']}"
+        
+        if scenario.get("expect_report"):
+            assert "analysis_id" in result['response']['response'], f"Expected report, but 'analysis_id' not found in response: {result['response']['response']}"
+            print("  ✅ Report expected and received.")
+        
+        if scenario.get("expect_follow_up"):
+            assert result['response']['metadata'].get("conversation_status", {}).get("analysis_ready") is False, "Expected follow-up, but analysis was ready."
+            print("  ✅ Follow-up expected and received.")

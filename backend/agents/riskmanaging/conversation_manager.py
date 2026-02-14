@@ -132,17 +132,16 @@ class ConversationManager:
                     missing_questions.append("지연 일수 또는 지연 위험에 대한 정보가 있습니까?")
                 
                 # Update follow_up_questions in parsed_response
-                if missing_questions:
-                    parsed_response["follow_up_questions"] = missing_questions
-                    parsed_response["message"] = "리스크 분석을 위해 다음 정보가 필요합니다: " + " ".join(missing_questions)
-                else:
-                    # Fallback message if all fields are extracted but score is < 3
-                    # (This case should ideally not happen if _check_analysis_ready is correctly aligned)
+                parsed_response["follow_up_questions"] = missing_questions # Always set the missing questions
+                parsed_response["message"] = "정보가 불충분합니다." # Generic message
+                
+                if not missing_questions: # Fallback message if for some reason no questions are generated but analysis is not ready
                     parsed_response["message"] = "아직 정보가 부족합니다. 더 자세한 내용을 알려주시겠습니까?"
                 # The LLM's status and message for insufficient info will be kept
 
             # Mandatory debug print as per instruction (after all calculations, before return)
-
+            print("DEBUG ConversationManager - extracted_data:", json.dumps(extracted_data, ensure_ascii=False))
+            print("DEBUG ConversationManager - analysis_ready_calculated:", analysis_ready_calculated)
             
             return parsed_response
 
