@@ -61,7 +61,7 @@
 -   **분석 및 보고 단계**: `analysis_ready`가 `True`가 되면, `rag_connector`, `risk_engine`, `report_generator` 모듈이 순차적으로 호출되어 최종 보고서를 생성하고, `analysis_in_progress`를 `False`로 설정하여 세션을 종료합니다.
 
 ## 4. Mermaid graph
-
+```mermaid
 graph TD
     subgraph Orchestrator_Call [Orchestrator Call]
         Start([User Input from Orchestrator]) --> A[RiskManagingAgent.run]
@@ -107,3 +107,4 @@ graph TD
     style M fill:#add8e6,stroke:#333,stroke-width:2px
     style N fill:#add8e6,stroke:#333,stroke-width:2px
     style O fill:#f0e68c,stroke:#333,stroke-width:2px
+```

@@ -8,6 +8,8 @@ import openai # Keep for potential future LLM use
 from openai import OpenAI
 from langsmith import traceable
 
+from backend.core.response_converter import normalize_response
+
 # Ensure backend directory is in path for module imports
 # current_dir is backend/agents/, need to reach project root (..)
 # or for modules like backend.rag.embedder (../rag)
@@ -262,9 +264,7 @@ class Orchestrator:
             session_state["active_agent"] = None # Reset active agent if it failed
             session_state["last_interaction_timestamp"] = time.time()
             self.conversation_store.save_state(session_id, session_state)
-            return {
-                "response":response_payload
-                }
+            return normalize_response(response_payload)
         
 
         # 3. Prepare agent-specific state and call agent
@@ -293,6 +293,8 @@ class Orchestrator:
             # The 'run' method for these agents does NOT return conversation_history or analysis_in_progress.
             agent_output = agent_instance.run(
                 user_input=user_input,
+                conversation_history=current_agent_history,
+                analysis_in_progress=analysis_in_progress_flag,
                 context=context # Agents like Email and Quiz expect context, not full history
             )
             response_content_for_history = agent_output.get("response", {}).get("response", "")
@@ -322,9 +324,7 @@ class Orchestrator:
         session_state["last_interaction_timestamp"] = time.time()
         self.conversation_store.save_state(session_id, session_state)
 
-        return {
-            "response":response_payload # This is the dict directly consumable by FastAPI ChatResponse
-        }
+        return normalize_response(response_payload)
 
 
 if __name__ == '__main__':

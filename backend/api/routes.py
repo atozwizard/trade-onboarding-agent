@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
 from backend.agents.orchestrator import Orchestrator # Import the Orchestrator
+from backend.schemas.agent_response import ChatResponse # Import the new ChatResponse schema
 
 router = APIRouter()
 
@@ -20,13 +21,6 @@ class ChatRequest(BaseModel):
     context: Optional[Dict[str, Any]] = None
 
 
-class ChatResponse(BaseModel):
-    """Chat response model"""
-    response: str
-    agent_type: str
-    metadata: Optional[Dict[str, Any]] = None
-
-
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
@@ -39,7 +33,7 @@ async def chat(request: ChatRequest):
     )
     
     # The orchestrator_result is already in the format expected by ChatResponse
-    return ChatResponse(**orchestrator_result["response"])
+    return ChatResponse(**orchestrator_result)
 
 
 @router.post("/quiz/start")

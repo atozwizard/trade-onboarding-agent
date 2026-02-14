@@ -24,7 +24,9 @@ from backend.agents.riskmanaging.schemas import (
     RiskScoring,
     LossSimulation,
     ControlGapAnalysis,
-    PreventionStrategy
+    PreventionStrategy,
+    RiskFactor, # Added
+    ReportRiskFactor # Added
 )
 from backend.agents.riskmanaging.config import AGENT_PERSONA # For persona context
 
