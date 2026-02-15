@@ -46,6 +46,7 @@ trade-onboarding-agent/
 │   ├── prompts/                # LLM prompts
 │   │   ├── quiz_prompt.txt
 │   │   ├── email_prompt.txt
+│   │   ├── orchestrator.txt
 │   │   ├── mistake_prompt.txt
 │   │   └── ceo_prompt.txt
 │   └── api/
