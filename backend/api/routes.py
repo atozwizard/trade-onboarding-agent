@@ -8,15 +8,16 @@ from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
 
 from backend.agents.base import BaseAgent
-from backend.dependencies import get_email_agent
+from backend.dependencies import get_email_agent, get_llm_gateway, get_document_retriever
 from backend.agents.quiz_agent import QuizAgent, _quiz_store
 from backend.agents.eval_agent import evaluate_quiz_list
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# 모듈 레벨 싱글톤
+# Module-level singletons
 quiz_agent = QuizAgent()
+_orchestrator = None
 
 
 class ChatRequest(BaseModel):
@@ -96,19 +97,74 @@ class EmailResponse(BaseModel):
     metadata: Dict[str, Any]
 
 
+# ====== Helper Functions ======
+
+def _get_orchestrator():
+    """
+    Lazy initialization for Orchestrator
+
+    Returns:
+        Orchestrator instance
+    """
+    global _orchestrator
+
+    if _orchestrator is None:
+        logger.info("Initializing Orchestrator (lazy init)...")
+        from backend.agents.orchestrator import Orchestrator
+
+        # Use existing dependency injection functions
+        llm = get_llm_gateway()
+        retriever = get_document_retriever()
+        _orchestrator = Orchestrator(llm, retriever)
+        logger.info("Orchestrator initialized successfully")
+
+    return _orchestrator
+
+
 # ====== Common Endpoints ======
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     """
     Main chat endpoint - routes to appropriate agent based on intent
+
+    Uses Orchestrator for multi-agent routing:
+    - Intent classification
+    - Agent selection (email_coach, quiz, risk_detect, ceo_sim, general_chat)
+    - Response formatting
+
+    Request example:
+    {
+        "message": "이메일 검토: We ship via FOB",
+        "context": {}
+    }
     """
-    # TODO: Implement orchestrator logic
-    return ChatResponse(
-        response="서버가 정상 작동 중입니다. 오케스트레이터를 구현해주세요.",
-        agent_type="system",
-        metadata={"status": "not_implemented"}
-    )
+    try:
+        logger.info(f"Chat request: {request.message[:100]}...")
+
+        # Get orchestrator (lazy init)
+        orchestrator = _get_orchestrator()
+
+        # Run orchestrator in thread pool to avoid blocking event loop
+        result = await asyncio.to_thread(
+            orchestrator.run,
+            user_input=request.message,  # Map message -> user_input for compatibility
+            context=request.context or {}
+        )
+
+        # Convert AgentResponse to ChatResponse
+        return ChatResponse(
+            response=result.response,
+            agent_type=result.agent_type,
+            metadata=result.metadata
+        )
+
+    except Exception as e:
+        logger.error(f"Chat endpoint failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Chat processing failed: {str(e)}"
+        )
 
 
 # ====== Quiz Agent Endpoints ======
