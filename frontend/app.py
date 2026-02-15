@@ -84,183 +84,41 @@ def main():
 
     st.info(mode_descriptions[st.session_state.mode])
 
-    # ====== 이메일 코칭 모드 전용 UI ======
-    if st.session_state.mode == "email":
-        email_mode = st.radio(
-            "이메일 모드 선택",
-            ["✍️ 작성 (Draft)", "🔍 검토 (Review)"],
-            horizontal=True
-        )
+    # 채팅 히스토리 표시
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-        if email_mode == "✍️ 작성 (Draft)":
-            st.markdown("### 📧 이메일 초안 작성")
+    # 사용자 입력
+    if prompt := st.chat_input("메시지를 입력하세요..."):
+        # 사용자 메시지 추가
+        st.session_state.messages.append({"role": "user", "content": prompt})
 
-            with st.form("email_draft_form"):
-                user_input = st.text_area(
-                    "요청 사항",
-                    placeholder="예: 미국 바이어에게 FOB 조건으로 100개 견적 요청",
-                    height=100
-                )
+        with st.chat_message("user"):
+            st.markdown(prompt)
 
-                col1, col2 = st.columns(2)
-                with col1:
-                    recipient_country = st.selectbox(
-                        "수신자 국가",
-                        ["USA", "Japan", "Korea", "China", "Germany", "UK", "Other"],
-                        index=0
-                    )
-                    relationship = st.selectbox(
-                        "관계",
-                        ["first_contact", "ongoing", "long_term"],
-                        index=0,
-                        format_func=lambda x: {
-                            "first_contact": "첫 접촉",
-                            "ongoing": "진행 중",
-                            "long_term": "장기 파트너"
-                        }[x]
-                    )
+        # AI 응답
+        with st.chat_message("assistant"):
+            with st.spinner("생각하는 중..."):
+                # API 호출
+                response = call_api("chat", {
+                    "message": prompt,
+                    "context": {
+                        "mode": st.session_state.mode
+                    }
+                })
 
-                with col2:
-                    purpose = st.selectbox(
-                        "이메일 목적",
-                        ["quotation", "negotiation", "inquiry", "complaint", "follow_up"],
-                        index=0,
-                        format_func=lambda x: {
-                            "quotation": "견적 요청",
-                            "negotiation": "협상",
-                            "inquiry": "문의",
-                            "complaint": "클레임",
-                            "follow_up": "후속 조치"
-                        }[x]
-                    )
+                if response:
+                    ai_message = response.get("response", "응답을 받지 못했습니다.")
+                    st.markdown(ai_message)
 
-                submitted = st.form_submit_button("📧 이메일 초안 생성", use_container_width=True)
-
-                if submitted:
-                    if not user_input:
-                        st.error("요청 사항을 입력해주세요.")
-                    else:
-                        with st.spinner("이메일 초안을 생성하는 중..."):
-                            response = call_api("email/draft", {
-                                "user_input": user_input,
-                                "recipient_country": recipient_country,
-                                "relationship": relationship,
-                                "purpose": purpose
-                            })
-
-                            if response:
-                                st.success("✅ 이메일 초안이 생성되었습니다!")
-                                st.markdown(response.get("response", ""))
-
-                                # 메타데이터 표시
-                                with st.expander("📊 생성 정보"):
-                                    st.json(response.get("metadata", {}))
-
-        else:  # Review 모드
-            st.markdown("### 🔍 이메일 검토")
-
-            with st.form("email_review_form"):
-                email_content = st.text_area(
-                    "검토할 이메일 내용",
-                    placeholder="검토할 이메일 전문을 붙여넣어주세요...",
-                    height=200
-                )
-
-                col1, col2 = st.columns(2)
-                with col1:
-                    recipient_country = st.selectbox(
-                        "수신자 국가",
-                        ["USA", "Japan", "Korea", "China", "Germany", "UK", "Other"],
-                        index=0
-                    )
-
-                with col2:
-                    purpose = st.selectbox(
-                        "이메일 목적",
-                        ["quotation", "negotiation", "inquiry", "complaint", "follow_up"],
-                        index=0,
-                        format_func=lambda x: {
-                            "quotation": "견적 요청",
-                            "negotiation": "협상",
-                            "inquiry": "문의",
-                            "complaint": "클레임",
-                            "follow_up": "후속 조치"
-                        }[x]
-                    )
-
-                submitted = st.form_submit_button("🔍 이메일 검토", use_container_width=True)
-
-                if submitted:
-                    if not email_content:
-                        st.error("검토할 이메일 내용을 입력해주세요.")
-                    else:
-                        with st.spinner("이메일을 검토하는 중..."):
-                            response = call_api("email/review", {
-                                "email_content": email_content,
-                                "recipient_country": recipient_country,
-                                "purpose": purpose
-                            })
-
-                            if response:
-                                st.success("✅ 이메일 검토가 완료되었습니다!")
-                                st.markdown(response.get("response", ""))
-
-                                # 메타데이터 표시
-                                with st.expander("📊 검토 정보"):
-                                    metadata = response.get("metadata", {})
-                                    st.json(metadata)
-
-                                    # 리스크 카운트 및 톤 점수 강조 표시
-                                    if "risk_count" in metadata:
-                                        risk_count = metadata["risk_count"]
-                                        if risk_count == 0:
-                                            st.success(f"🟢 발견된 리스크: {risk_count}건")
-                                        elif risk_count <= 2:
-                                            st.warning(f"🟡 발견된 리스크: {risk_count}건")
-                                        else:
-                                            st.error(f"🔴 발견된 리스크: {risk_count}건")
-
-                                    if "tone_score" in metadata:
-                                        tone_score = metadata["tone_score"]
-                                        st.metric("톤 점수", f"{tone_score}/10")
-
-    # ====== 일반 채팅 모드 (기존 코드) ======
-    else:
-        # 채팅 히스토리 표시
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-
-        # 사용자 입력
-        if prompt := st.chat_input("메시지를 입력하세요..."):
-            # 사용자 메시지 추가
-            st.session_state.messages.append({"role": "user", "content": prompt})
-
-            with st.chat_message("user"):
-                st.markdown(prompt)
-
-            # AI 응답
-            with st.chat_message("assistant"):
-                with st.spinner("생각하는 중..."):
-                    # API 호출
-                    response = call_api("chat", {
-                        "message": prompt,
-                        "context": {
-                            "mode": st.session_state.mode
-                        }
+                    # AI 메시지 추가
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": ai_message
                     })
-
-                    if response:
-                        ai_message = response.get("response", "응답을 받지 못했습니다.")
-                        st.markdown(ai_message)
-
-                        # AI 메시지 추가
-                        st.session_state.messages.append({
-                            "role": "assistant",
-                            "content": ai_message
-                        })
-                    else:
-                        st.error("서버와 통신할 수 없습니다. 백엔드 서버가 실행 중인지 확인해주세요.")
+                else:
+                    st.error("서버와 통신할 수 없습니다. 백엔드 서버가 실행 중인지 확인해주세요.")
 
 
 if __name__ == "__main__":
