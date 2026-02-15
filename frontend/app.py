@@ -256,7 +256,14 @@ def display_risk_report(report_data: Dict[str, Any]):
 
     st.subheader("⚠️ 주요 리스크 요인 분석")
     if risk_factors:
-        for factor_name, factor_data in risk_factors.items():
+        # 딕셔너리인 경우 .items() 사용
+        if isinstance(risk_factors, dict):
+            items = risk_factors.items()
+        # 리스트인 경우 가상의 key-value 쌍 생성
+        else:
+            items = [(f"factor_{i}", f) for i, f in enumerate(risk_factors)]
+
+        for factor_name, factor_data in items:
             name_kr = factor_data.get("name_kr", factor_name)
             impact = factor_data.get("impact", 0)
             likelihood = factor_data.get("likelihood", 0)
