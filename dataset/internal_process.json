@@ -7,18 +7,7 @@
       "stage": "거래계약",
       "person": "영업",
       "input": "견적서",
-      "output": "계약서",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["sales", "manager"],
-      "situation": ["contract_negotiation", "pre_sales"],
-      "topic": ["sales_process", "contract_management", "negotiation"],
-      "priority": "normal",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "sales_strategy"],
-      "source_dataset": "internal_process.json"
+      "output": "계약서"
     }
   },
   {
@@ -29,18 +18,7 @@
       "stage": "발주확정",
       "person": "영업",
       "input": "계약서",
-      "output": "PO",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["sales", "junior", "working"],
-      "situation": ["order_confirmation", "contract_execution"],
-      "topic": ["sales_process", "purchase_order", "documentation"],
-      "priority": "normal",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "order_management"],
-      "source_dataset": "internal_process.json"
+      "output": "PO"
     }
   },
   {
@@ -51,18 +29,7 @@
       "stage": "선적요청",
       "person": "영업",
       "input": "PO",
-      "output": "선적요청서",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["sales", "logistics", "working"],
-      "situation": ["shipment_request", "logistics_planning"],
-      "topic": ["sales_process", "logistics_process", "documentation"],
-      "priority": "normal",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "logistics_operations"],
-      "source_dataset": "internal_process.json"
+      "output": "선적요청서"
     }
   },
   {
@@ -73,18 +40,7 @@
       "stage": "포워더연락",
       "person": "물류",
       "input": "선적요청",
-      "output": "부킹확정",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["logistics", "working"],
-      "situation": ["freight_forwarder_communication", "shipment_booking"],
-      "topic": ["logistics_process", "freight_forwarding", "shipment_planning"],
-      "priority": "high",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "logistics_operations"],
-      "source_dataset": "internal_process.json"
+      "output": "부킹확정"
     }
   },
   {
@@ -95,18 +51,7 @@
       "stage": "부킹확정",
       "person": "포워더",
       "input": "스케줄",
-      "output": "부킹번호",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["logistics", "working"],
-      "situation": ["booking_confirmation", "shipment_planning"],
-      "topic": ["logistics_process", "shipment_booking", "documentation"],
-      "priority": "high",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "logistics_operations"],
-      "source_dataset": "internal_process.json"
+      "output": "부킹번호"
     }
   },
   {
@@ -117,18 +62,7 @@
       "stage": "인보이스작성",
       "person": "영업",
       "input": "계약",
-      "output": "invoice",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["sales", "finance", "working"],
-      "situation": ["invoice_creation", "financial_documentation"],
-      "topic": ["sales_process", "invoice", "documentation", "trade_finance"],
-      "priority": "normal",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "financial_management"],
-      "source_dataset": "internal_process.json"
+      "output": "invoice"
     }
   },
   {
@@ -139,18 +73,7 @@
       "stage": "패킹리스트",
       "person": "물류",
       "input": "수량",
-      "output": "packing list",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["logistics", "working"],
-      "situation": ["packing_documentation", "shipment_preparation"],
-      "topic": ["packing_list", "logistics_process", "documentation"],
-      "priority": "normal",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "logistics_operations"],
-      "source_dataset": "internal_process.json"
+      "output": "packing list"
     }
   },
   {
@@ -161,18 +84,7 @@
       "stage": "BL draft확인",
       "person": "영업",
       "input": "draft",
-      "output": "수정요청",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["sales", "logistics", "working"],
-      "situation": ["document_review", "BL_revision", "compliance_check"],
-      "topic": ["bill_of_lading", "documentation", "compliance", "quality_control"],
-      "priority": "critical",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "error_prevention"],
-      "source_dataset": "internal_process.json"
+      "output": "수정요청"
     }
   },
   {
@@ -183,18 +95,7 @@
       "stage": "BL확정",
       "person": "포워더",
       "input": "수정본",
-      "output": "final BL",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["logistics", "working"],
-      "situation": ["document_finalization", "BL_issuance", "shipment_confirmation"],
-      "topic": ["bill_of_lading", "documentation", "logistics_process"],
-      "priority": "critical",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "compliance_check"],
-      "source_dataset": "internal_process.json"
+      "output": "final BL"
     }
   },
   {
@@ -205,18 +106,7 @@
       "stage": "선적완료",
       "person": "물류",
       "input": "컨테이너",
-      "output": "선적보고",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["logistics", "working"],
-      "situation": ["shipment_completion", "reporting"],
-      "topic": ["logistics_process", "shipment_tracking", "status_reporting"],
-      "priority": "normal",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "status_update"],
-      "source_dataset": "internal_process.json"
+      "output": "선적보고"
     }
   },
   {
@@ -227,18 +117,7 @@
       "stage": "ETA공유",
       "person": "물류",
       "input": "선박스케줄",
-      "output": "ETA공지",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["logistics", "working"],
-      "situation": ["ETA_notification", "shipment_tracking"],
-      "topic": ["logistics_process", "ETA", "communication"],
-      "priority": "normal",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "logistics_operations"],
-      "source_dataset": "internal_process.json"
+      "output": "ETA공지"
     }
   },
   {
@@ -249,18 +128,7 @@
       "stage": "통관서류전달",
       "person": "영업",
       "input": "BL/invoice",
-      "output": "통관세트",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["sales", "compliance", "working"],
-      "situation": ["customs_documentation", "document_submission"],
-      "topic": ["customs_procedure", "documentation", "compliance"],
-      "priority": "high",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "compliance_check"],
-      "source_dataset": "internal_process.json"
+      "output": "통관세트"
     }
   },
   {
@@ -271,18 +139,7 @@
       "stage": "통관진행",
       "person": "관세사",
       "input": "서류",
-      "output": "통관완료",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["customs_broker", "logistics", "manager"],
-      "situation": ["customs_clearance", "import_export_process"],
-      "topic": ["customs_procedure", "documentation", "compliance"],
-      "priority": "high",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "compliance_check"],
-      "source_dataset": "internal_process.json"
+      "output": "통관완료"
     }
   },
   {
@@ -293,18 +150,7 @@
       "stage": "입고확인",
       "person": "창고",
       "input": "입고서",
-      "output": "입고완료",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["warehouse", "logistics", "working"],
-      "situation": ["goods_receipt", "inventory_management"],
-      "topic": ["warehouse_operations", "inventory_control", "logistics_process"],
-      "priority": "normal",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "logistics_operations"],
-      "source_dataset": "internal_process.json"
+      "output": "입고완료"
     }
   },
   {
@@ -315,18 +161,7 @@
       "stage": "품질확인",
       "person": "QC",
       "input": "샘플",
-      "output": "검사결과",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["quality_control", "working"],
-      "situation": ["quality_inspection", "post_arrival"],
-      "topic": ["quality_control", "product_inspection", "compliance"],
-      "priority": "high",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "quality_assurance"],
-      "source_dataset": "internal_process.json"
+      "output": "검사결과"
     }
   },
   {
@@ -337,18 +172,7 @@
       "stage": "거래처통보",
       "person": "영업",
       "input": "결과",
-      "output": "메일",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["sales", "working"],
-      "situation": ["customer_notification", "reporting"],
-      "topic": ["customer_relations", "sales_process", "communication"],
-      "priority": "normal",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "communication_strategy"],
-      "source_dataset": "internal_process.json"
+      "output": "메일"
     }
   },
   {
@@ -359,18 +183,7 @@
       "stage": "정산요청",
       "person": "회계",
       "input": "invoice",
-      "output": "비용확정",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["finance", "manager"],
-      "situation": ["financial_settlement", "cost_management"],
-      "topic": ["trade_finance", "accounting", "cost_control"],
-      "priority": "normal",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "financial_management"],
-      "source_dataset": "internal_process.json"
+      "output": "비용확정"
     }
   },
   {
@@ -381,18 +194,7 @@
       "stage": "환율확인",
       "person": "회계",
       "input": "환율",
-      "output": "정산액",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["finance", "working"],
-      "situation": ["currency_check", "financial_settlement"],
-      "topic": ["trade_finance", "exchange_rate", "accounting"],
-      "priority": "normal",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "financial_management"],
-      "source_dataset": "internal_process.json"
+      "output": "정산액"
     }
   },
   {
@@ -403,18 +205,7 @@
       "stage": "세금계산서",
       "person": "회계",
       "input": "거래내역",
-      "output": "세금계산서",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["finance", "compliance", "working"],
-      "situation": ["tax_documentation", "financial_reporting"],
-      "topic": ["tax_compliance", "accounting", "documentation"],
-      "priority": "high",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "compliance_check", "financial_management"],
-      "source_dataset": "internal_process.json"
+      "output": "세금계산서"
     }
   },
   {
@@ -425,18 +216,7 @@
       "stage": "거래종료",
       "person": "전부서",
       "input": "전체",
-      "output": "완료보고",
-      "original_category": "internal_process",
-      "document_type": "process_flow",
-      "country": ["Global"],
-      "role": ["executive", "manager", "working"],
-      "situation": ["transaction_completion", "project_closure", "reporting"],
-      "topic": ["trade_process", "project_management", "reporting"],
-      "priority": "normal",
-      "level": "manager",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "process_guidance", "project_review"],
-      "source_dataset": "internal_process.json"
+      "output": "완료보고"
     }
   }
 ]

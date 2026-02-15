@@ -8,18 +8,7 @@
       "definition": "선하증권",
       "usage": "선적 후 발행",
       "caution": "오기재시 수정비용",
-      "related_work": "선적·통관",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["sales", "logistics", "junior", "working"],
-      "situation": ["documentation", "customs_clearance", "shipment"],
-      "topic": ["bill_of_lading", "documentation", "logistics"],
-      "priority": "normal",
-      "level": "beginner",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "faq", "compliance_check"],
-      "source_dataset": "company_domain.json"
+      "related_work": "선적·통관"
     }
   },
   {
@@ -31,18 +20,7 @@
       "definition": "수하인",
       "usage": "물품 수령자",
       "caution": "오기재시 통관지연",
-      "related_work": "통관",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["sales", "logistics", "junior", "working"],
-      "situation": ["documentation", "customs_clearance", "delivery"],
-      "topic": ["consignee", "documentation", "customs_procedure"],
-      "priority": "normal",
-      "level": "beginner",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "faq", "compliance_check"],
-      "source_dataset": "company_domain.json"
+      "related_work": "통관"
     }
   },
   {
@@ -54,18 +32,7 @@
       "definition": "송하인",
       "usage": "발송자",
       "caution": "계약자와 다를 수 있음",
-      "related_work": "계약",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["sales", "logistics", "working"],
-      "situation": ["documentation", "contract", "shipment"],
-      "topic": ["shipper", "documentation", "contract_management"],
-      "priority": "normal",
-      "level": "beginner",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "faq", "compliance_check"],
-      "source_dataset": "company_domain.json"
+      "related_work": "계약"
     }
   },
   {
@@ -77,18 +44,7 @@
       "definition": "통지처",
       "usage": "도착 통지 대상",
       "caution": "누락시 클레임",
-      "related_work": "도착관리",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["logistics", "working"],
-      "situation": ["documentation", "arrival_management", "claim_prevention"],
-      "topic": ["notify_party", "documentation", "logistics"],
-      "priority": "normal",
-      "level": "beginner",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "faq", "compliance_check"],
-      "source_dataset": "company_domain.json"
+      "related_work": "도착관리"
     }
   },
   {
@@ -100,18 +56,7 @@
       "definition": "본선인도조건",
       "usage": "선적항 기준 책임",
       "caution": "보험 미포함",
-      "related_work": "계약",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["sales", "logistics", "manager", "executive"],
-      "situation": ["contract", "negotiation", "risk_management"],
-      "topic": ["incoterms", "contract_terms", "risk_allocation"],
-      "priority": "high",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "decision_support", "negotiation"],
-      "source_dataset": "company_domain.json"
+      "related_work": "계약"
     }
   },
   {
@@ -123,18 +68,7 @@
       "definition": "운임보험 포함",
       "usage": "수입자 부담↓",
       "caution": "보험범위 확인",
-      "related_work": "계약",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["sales", "logistics", "manager", "executive"],
-      "situation": ["contract", "negotiation", "risk_management"],
-      "topic": ["incoterms", "contract_terms", "risk_allocation", "trade_insurance"],
-      "priority": "high",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "decision_support", "negotiation"],
-      "source_dataset": "company_domain.json"
+      "related_work": "계약"
     }
   },
   {
@@ -146,18 +80,7 @@
       "definition": "체선료",
       "usage": "항구 지연비용",
       "caution": "하루 단위 발생",
-      "related_work": "물류비",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["logistics", "manager", "finance"],
-      "situation": ["delay", "cost_issue", "port_congestion"],
-      "topic": ["logistics_cost", "demurrage", "port_operations"],
-      "priority": "high",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "cost_control", "problem_solving"],
-      "source_dataset": "company_domain.json"
+      "related_work": "물류비"
     }
   },
   {
@@ -169,18 +92,7 @@
       "definition": "장치료",
       "usage": "컨테이너 반납지연",
       "caution": "무료기간 확인",
-      "related_work": "운송",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["logistics", "manager", "finance"],
-      "situation": ["delay", "cost_issue", "container_management"],
-      "topic": ["logistics_cost", "detention", "container_management"],
-      "priority": "high",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "cost_control", "problem_solving"],
-      "source_dataset": "company_domain.json"
+      "related_work": "운송"
     }
   },
   {
@@ -192,18 +104,7 @@
       "definition": "품목분류코드",
       "usage": "통관 필수",
       "caution": "오기재시 벌금",
-      "related_work": "통관",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["customs_broker", "logistics", "manager", "compliance"],
-      "situation": ["customs_clearance", "documentation_error", "compliance"],
-      "topic": ["HS_code", "customs_duty", "tariff_classification"],
-      "priority": "critical",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "compliance_check", "decision_support"],
-      "source_dataset": "company_domain.json"
+      "related_work": "통관"
     }
   },
   {
@@ -215,18 +116,7 @@
       "definition": "패킹리스트",
       "usage": "포장 상세",
       "caution": "수량 불일치 주의",
-      "related_work": "선적",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["logistics", "working", "sales"],
-      "situation": ["documentation", "shipment", "quantity_verification"],
-      "topic": ["packing_list", "documentation", "logistics"],
-      "priority": "normal",
-      "level": "beginner",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "faq", "compliance_check"],
-      "source_dataset": "company_domain.json"
+      "related_work": "선적"
     }
   },
   {
@@ -238,18 +128,7 @@
       "definition": "상업송장",
       "usage": "거래금액",
       "caution": "환율 영향",
-      "related_work": "정산",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["sales", "finance", "working"],
-      "situation": ["documentation", "payment", "currency_risk"],
-      "topic": ["commercial_invoice", "documentation", "trade_finance", "payment"],
-      "priority": "normal",
-      "level": "beginner",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "faq", "financial_management"],
-      "source_dataset": "company_domain.json"
+      "related_work": "정산"
     }
   },
   {
@@ -261,18 +140,7 @@
       "definition": "신용장",
       "usage": "은행 지급보증",
       "caution": "조건 엄격",
-      "related_work": "결제",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["sales", "executive", "manager", "finance"],
-      "situation": ["payment_issue", "trade_finance", "contract"],
-      "topic": ["L/C", "trade_finance", "payment_terms"],
-      "priority": "high",
-      "level": "manager",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "decision_support", "risk_management"],
-      "source_dataset": "company_domain.json"
+      "related_work": "결제"
     }
   },
   {
@@ -284,18 +152,7 @@
       "definition": "도착예정",
       "usage": "일정관리",
       "caution": "변경 잦음",
-      "related_work": "물류",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["logistics", "working"],
-      "situation": ["shipment_tracking", "schedule_management"],
-      "topic": ["ETA", "logistics", "shipment_tracking"],
-      "priority": "normal",
-      "level": "beginner",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "faq", "logistics_operations"],
-      "source_dataset": "company_domain.json"
+      "related_work": "물류"
     }
   },
   {
@@ -307,18 +164,7 @@
       "definition": "출발예정",
       "usage": "선적일정",
       "caution": "지연 빈번",
-      "related_work": "선적",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["logistics", "working"],
-      "situation": ["shipment_planning", "schedule_management"],
-      "topic": ["ETD", "logistics", "shipment_planning"],
-      "priority": "normal",
-      "level": "beginner",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "faq", "logistics_operations"],
-      "source_dataset": "company_domain.json"
+      "related_work": "선적"
     }
   },
   {
@@ -330,18 +176,7 @@
       "definition": "컨테이너 단위",
       "usage": "대량화물",
       "caution": "비용효율",
-      "related_work": "해상",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["logistics", "working"],
-      "situation": ["shipment_method", "cost_efficiency"],
-      "topic": ["FCL", "container_shipping", "logistics"],
-      "priority": "normal",
-      "level": "beginner",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "faq", "logistics_operations"],
-      "source_dataset": "company_domain.json"
+      "related_work": "해상"
     }
   },
   {
@@ -353,18 +188,7 @@
       "definition": "혼적",
       "usage": "소량화물",
       "caution": "분실위험",
-      "related_work": "해상",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["logistics", "working"],
-      "situation": ["shipment_method", "risk_management"],
-      "topic": ["LCL", "container_shipping", "logistics"],
-      "priority": "normal",
-      "level": "beginner",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "faq", "logistics_operations"],
-      "source_dataset": "company_domain.json"
+      "related_work": "해상"
     }
   },
   {
@@ -376,18 +200,7 @@
       "definition": "원본 BL",
       "usage": "통관 필수",
       "caution": "분실시 재발행 어려움",
-      "related_work": "통관",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["logistics", "working", "compliance"],
-      "situation": ["documentation", "customs_clearance", "risk_management"],
-      "topic": ["bill_of_lading", "documentation", "customs_procedure"],
-      "priority": "high",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "faq", "compliance_check", "risk_management"],
-      "source_dataset": "company_domain.json"
+      "related_work": "통관"
     }
   },
   {
@@ -399,18 +212,7 @@
       "definition": "BL 전자해제",
       "usage": "빠른 인도",
       "caution": "승인필요",
-      "related_work": "도착",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["logistics", "working"],
-      "situation": ["documentation", "cargo_release", "shipment_tracking"],
-      "topic": ["bill_of_lading", "documentation", "logistics"],
-      "priority": "normal",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "faq", "logistics_operations"],
-      "source_dataset": "company_domain.json"
+      "related_work": "도착"
     }
   },
   {
@@ -422,18 +224,7 @@
       "definition": "운임착불",
       "usage": "수입자 지불",
       "caution": "분쟁 가능",
-      "related_work": "정산",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["sales", "finance", "working"],
-      "situation": ["payment_terms", "cost_allocation", "dispute_potential"],
-      "topic": ["freight_cost", "payment_terms", "trade_finance"],
-      "priority": "normal",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "faq", "financial_management", "negotiation"],
-      "source_dataset": "company_domain.json"
+      "related_work": "정산"
     }
   },
   {
@@ -445,18 +236,7 @@
       "definition": "운임선불",
       "usage": "수출자 지불",
       "caution": "계약확인",
-      "related_work": "정산",
-      "original_category": "company_domain",
-      "document_type": "terminology",
-      "country": ["Global"],
-      "role": ["sales", "finance", "working"],
-      "situation": ["payment_terms", "cost_allocation", "contract_compliance"],
-      "topic": ["freight_cost", "payment_terms", "trade_finance"],
-      "priority": "normal",
-      "level": "working",
-      "reliability": "high",
-      "use_case": ["training", "coaching", "faq", "financial_management", "negotiation"],
-      "source_dataset": "company_domain.json"
+      "related_work": "정산"
     }
   }
 ]
