@@ -14,8 +14,7 @@ sys.path.append(project_root)
 
 # Local imports
 from backend.config import get_settings
-from backend.rag.embedder import get_embedding # For RAG
-from backend.rag.retriever import search as rag_search # For RAG
+# RAG and validation functionality now provided by tools.py
 from backend.agents.email_agent.state import EmailGraphState
 
 # --- Constants ---
@@ -62,46 +61,48 @@ EMAIL_AGENT_COMPONENTS = EmailAgentComponents()
 
 def perform_rag_search_node(state: EmailGraphState) -> Dict[str, Any]:
     state_dict = cast(Dict[str, Any], state)
-    
+
     user_input = state_dict["user_input"]
     context = state_dict["context"]
-    settings = EMAIL_AGENT_COMPONENTS.settings
 
-    retrieved_documents = []
-    used_rag = False
+    # Build search query
+    rag_query = user_input
+    if context.get("email_subject"):
+        rag_query += f" {context['email_subject']}"
+    if context.get("recipient_type"):
+        rag_query += f" {context['recipient_type']}"
+
+    # Use tool: search_email_references
+    from backend.agents.email_agent.tools import search_email_references
 
     try:
-        if not settings.upstage_api_key:
-            print("Skipping RAG search: UPSTAGE_API_KEY is not set.")
-        else:
-            rag_query = user_input
-            if context.get("email_subject"):
-                rag_query += f" {context['email_subject']}"
-            if context.get("recipient_type"):
-                rag_query += f" {context['recipient_type']}"
-            
-            rag_results = rag_search(query=rag_query, k=3)
+        # Determine search type from mode
+        mode = context.get("mode", "review")
+        search_type = "mistakes" if mode == "review" else "all"
 
-            if rag_results:
-                used_rag = True
-                retrieved_documents = [{"document": doc["document"], "metadata": doc["metadata"]} for doc in rag_results]
-
+        retrieved_documents = search_email_references(
+            query=rag_query,
+            k=3,
+            search_type=search_type
+        )
+        used_rag = len(retrieved_documents) > 0
     except Exception as e:
-        print(f"An error occurred during RAG search: {e}")
+        print(f"Error during RAG search: {e}")
+        retrieved_documents = []
+        used_rag = False
 
     state_dict["retrieved_documents"] = retrieved_documents
     state_dict["used_rag"] = used_rag
 
+    # Format context string
     rag_context_str = ""
     if used_rag and retrieved_documents:
-        rag_context_str = """
---- 참조 문서 ---
-"""
+        rag_context_str = "\n--- 참조 문서 ---\n"
         for i, doc in enumerate(retrieved_documents):
-            rag_context_str += f"""문서 {i+1} (출처: {doc['metadata'].get('source_dataset', 'unknown')} | 유형: {doc['metadata'].get('document_type', 'unknown')} | 주제: {', '.join(doc['metadata'].get('topic', []))}):
-{doc['document']}
+            metadata = doc.get("metadata", {})
+            rag_context_str += f"\n문서 {i+1} (출처: {metadata.get('source_dataset', 'unknown')} | 유형: {metadata.get('document_type', 'unknown')})\n"
+            rag_context_str += f"{doc['document']}\n"
 
-"""
     state_dict["rag_context_str"] = rag_context_str
 
     return state_dict

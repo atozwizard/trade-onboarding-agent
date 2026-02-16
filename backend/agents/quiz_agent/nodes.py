@@ -14,8 +14,7 @@ sys.path.append(project_root)
 
 # Local imports
 from backend.config import get_settings
-from backend.rag.embedder import get_embedding # For RAG
-from backend.rag.retriever import search as rag_search # For RAG
+# RAG functionality now provided by tools.py
 from backend.agents.quiz_agent.state import QuizGraphState
 
 # --- Constants ---
@@ -62,46 +61,43 @@ QUIZ_AGENT_COMPONENTS = QuizAgentComponents()
 
 def perform_rag_search_node(state: QuizGraphState) -> Dict[str, Any]:
     state_dict = cast(Dict[str, Any], state)
-    
+
     user_input = state_dict["user_input"]
     context = state_dict["context"]
-    settings = QUIZ_AGENT_COMPONENTS.settings
 
-    retrieved_documents = []
-    used_rag = False
+    # Build search query
+    rag_query = user_input
+    if context.get("topic"):
+        rag_query += f" {context['topic']}"
+    if context.get("difficulty"):
+        rag_query += f" {context['difficulty']}"
+
+    # Use tool: search_trade_documents
+    from backend.agents.quiz_agent.tools import search_trade_documents
 
     try:
-        if not settings.upstage_api_key:
-            print("Skipping RAG search: UPSTAGE_API_KEY is not set.")
-        else:
-            rag_query = user_input
-            if context.get("topic"):
-                rag_query += f" {context['topic']}"
-            if context.get("difficulty"):
-                rag_query += f" {context['difficulty']}"
-            
-            rag_results = rag_search(query=rag_query, k=3)
-
-            if rag_results:
-                used_rag = True
-                retrieved_documents = [{"document": doc["document"], "metadata": doc["metadata"]} for doc in rag_results]
-
+        retrieved_documents = search_trade_documents(
+            query=rag_query,
+            k=3,
+            document_type=context.get("document_type"),
+            category=context.get("category")
+        )
+        used_rag = len(retrieved_documents) > 0
     except Exception as e:
-        print(f"An error occurred during RAG search: {e}")
+        print(f"Error during RAG search: {e}")
+        retrieved_documents = []
+        used_rag = False
 
     state_dict["retrieved_documents"] = retrieved_documents
     state_dict["used_rag"] = used_rag
 
-    rag_context_str = ""
-    if used_rag and retrieved_documents:
-        rag_context_str = """
---- 참조 문서 ---
-"""
-        for i, doc in enumerate(retrieved_documents):
-            rag_context_str += f"""문서 {i+1} (출처: {doc['metadata'].get('source_dataset', 'unknown')} | 유형: {doc['metadata'].get('document_type', 'unknown')} | 주제: {', '.join(doc['metadata'].get('topic', []))}):
-{doc['document']}
+    # Use tool: format_quiz_context
+    from backend.agents.quiz_agent.tools import format_quiz_context
 
-"""
+    rag_context_str = format_quiz_context(
+        retrieved_documents=retrieved_documents,
+        include_metadata=True
+    )
     state_dict["rag_context_str"] = rag_context_str
 
     return state_dict

@@ -22,7 +22,8 @@ sys.path.append(project_root)
 
 # Local imports (minimal as most will be internal)
 from backend.config import get_settings
-from backend.rag.embedder import get_embedding
+# RAG functionality now provided by tools.py
+# from backend.rag.embedder import get_embedding
 from pydantic import BaseModel, Field
 
 # Import RiskManagingGraphState explicitly and minimally
@@ -500,21 +501,16 @@ class RAGConnector:
             ])
             full_query = f"{recent_context} {user_input}"
         
-        # Use basic search (filtering will be done post-retrieval)
-        from backend.rag.retriever import search
-        all_documents = search(full_query, k=k)
-        
-        # Filter by RAG_DATASETS (risk-specific document types)
-        filtered_documents = []
-        for doc in all_documents:
-            metadata = doc.get("metadata", {})
-            doc_category = metadata.get("original_category", "")
-            
-            # Check if document belongs to risk-related datasets
-            if doc_category in RAG_DATASETS:
-                filtered_documents.append(doc)
-        
-        print(f"RAGConnector: Retrieved {len(all_documents)} docs, filtered to {len(filtered_documents)} risk-related docs")
+        # Use tool: search_risk_cases
+        from backend.agents.riskmanaging.tools import search_risk_cases
+
+        filtered_documents = search_risk_cases(
+            query=full_query,
+            k=k,
+            datasets=RAG_DATASETS
+        )
+
+        print(f"RAGConnector: Retrieved {len(filtered_documents)} risk-related documents using tools")
         return filtered_documents
     
     def extract_similar_cases_and_evidence(
