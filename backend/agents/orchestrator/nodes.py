@@ -3,7 +3,6 @@
 import os
 import sys
 import json
-import uuid
 import time
 from typing import Dict, Any, List, Optional, Type, cast
 
@@ -17,29 +16,12 @@ from backend.core.response_converter import normalize_response
 
 # Internal imports for Orchestrator package
 from .state import OrchestratorGraphState
+from .session_store import create_conversation_store
 
 from backend.agents.default_chat.default_chat_agent import DefaultChatAgent # Actual DefaultChatAgent import
 from backend.agents.riskmanaging.graph import RiskManagingAgent # Actual RiskManagingAgent import
 from backend.agents.quiz_agent.quiz_agent import QuizAgent                   # Actual QuizAgent import
 from backend.agents.email_agent.email_agent import EmailAgent               # Actual EmailAgent import
-
-
-# --- In-Memory Conversation Store (from old orchestrator.py) ---
-class InMemoryConversationStore:
-    _store: Dict[str, Dict[str, Any]] = {}
-
-    def get_state(self, session_id: str) -> Optional[Dict[str, Any]]:
-        return self._store.get(session_id)
-
-    def save_state(self, session_id: str, state: Dict[str, Any]):
-        self._store[session_id] = state
-
-    def delete_state(self, session_id: str):
-        if session_id in self._store:
-            del self._store[session_id]
-
-    def create_new_session_id(self) -> str:
-        return str(uuid.uuid4())
 
 
 # --- Prompt Loader Function (from old orchestrator.py) ---
@@ -73,7 +55,7 @@ DEFAULT_AGENT_NAME = "default_chat"
 class OrchestratorComponents:
     def __init__(self):
         self.settings = get_settings()
-        self.conversation_store = InMemoryConversationStore()
+        self.conversation_store = create_conversation_store()  # Factory function chooses InMemory or Redis
         
         self.llm = None
         if self.settings.upstage_api_key:

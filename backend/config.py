@@ -18,7 +18,16 @@ class Settings(BaseSettings):
 
     # Database (optional)
     database_url: str = ""
-    redis_url: str = ""
+
+    # Redis Session Store
+    redis_url: str = ""  # Example: "redis://localhost:6379/0"
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+    redis_password: str = ""
+    redis_db: int = 0
+    redis_ssl: bool = False
+    session_ttl: int = 3600  # Session TTL in seconds (1 hour)
+    use_redis_session: bool = False  # True for production, False for development
 
     # Application
     environment: str = "development"
