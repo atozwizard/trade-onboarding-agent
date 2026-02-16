@@ -4,6 +4,7 @@ from typing import Callable, Literal
 from langgraph.graph import StateGraph, END
 
 # Internal imports
+from backend.agents.base import BaseAgent
 from .state import RiskManagingGraphState
 from backend.agents.riskmanaging.nodes import (
     prepare_risk_state_node,
@@ -82,7 +83,7 @@ def create_risk_managing_graph() -> StateGraph:
 risk_managing_graph = create_risk_managing_graph()
 compiled_risk_managing_app = risk_managing_graph.compile()
 
-class RiskManagingAgent:
+class RiskManagingAgent(BaseAgent):
     """
     Risk Managing Agent wrapper for the orchestrator.
     Implemented as a thin wrapper around the LangGraph workflow.

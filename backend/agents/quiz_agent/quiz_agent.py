@@ -11,13 +11,14 @@ project_root = os.path.abspath(os.path.join(current_dir, '..', '..', '..'))
 sys.path.append(project_root)
 
 # Local imports for the new graph structure
+from backend.agents.base import BaseAgent
 from .state import QuizGraphState
 from .graph import quiz_agent_graph
 
 # Compile the graph globally once
 compiled_quiz_agent_app = quiz_agent_graph.compile()
 
-class QuizAgent:
+class QuizAgent(BaseAgent):
     """
     Quiz Agent, now implemented as a thin wrapper around a LangGraph workflow.
     """

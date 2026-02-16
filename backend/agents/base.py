@@ -5,7 +5,7 @@ Base Agent Interface
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 
 @dataclass
@@ -50,16 +50,27 @@ class BaseAgent(ABC):
     """
 
     @abstractmethod
-    def run(self, user_input: str, context: Dict[str, Any]) -> AgentResponse:
+    def run(
+        self,
+        user_input: str,
+        conversation_history: List[Dict[str, str]],
+        analysis_in_progress: bool,
+        context: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """
         에이전트 실행 (메인 엔트리포인트)
 
         Args:
             user_input: 사용자 입력 메시지
-            context: 컨텍스트 정보 (mode, email_content 등)
+            conversation_history: 이전 대화 이력
+            analysis_in_progress: 멀티턴 분석 진행 중 플래그
+            context: 추가 컨텍스트 정보 (mode, email_content 등)
 
         Returns:
-            AgentResponse: 구조화된 응답 객체
+            Dict containing:
+                - response: 에이전트 응답 (Dict 또는 str)
+                - conversation_history: 업데이트된 대화 이력
+                - analysis_in_progress: 멀티턴 계속 여부 (RiskAgent만 사용)
 
         Raises:
             ValueError: 입력이 유효하지 않을 때

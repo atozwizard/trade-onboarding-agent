@@ -11,13 +11,14 @@ project_root = os.path.abspath(os.path.join(current_dir, '..', '..', '..'))
 sys.path.append(project_root)
 
 # Local imports for the new graph structure
+from backend.agents.base import BaseAgent
 from .state import EmailGraphState
 from .graph import email_agent_graph
 
 # Compile the graph globally once
 compiled_email_agent_app = email_agent_graph.compile()
 
-class EmailAgent:
+class EmailAgent(BaseAgent):
     """
     Email Agent, now implemented as a thin wrapper around a LangGraph workflow.
     """
