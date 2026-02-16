@@ -256,7 +256,14 @@ def display_risk_report(report_data: Dict[str, Any]):
 
     st.subheader("⚠️ 주요 리스크 요인 분석")
     if risk_factors:
-        for factor_name, factor_data in risk_factors.items():
+        # 딕셔너리인 경우 .items() 사용
+        if isinstance(risk_factors, dict):
+            items = risk_factors.items()
+        # 리스트인 경우 가상의 key-value 쌍 생성
+        else:
+            items = [(f"factor_{i}", f) for i, f in enumerate(risk_factors)]
+
+        for factor_name, factor_data in items:
             name_kr = factor_data.get("name_kr", factor_name)
             impact = factor_data.get("impact", 0)
             likelihood = factor_data.get("likelihood", 0)
@@ -364,12 +371,12 @@ def main():
                                          })
 
                 if response_data:
-                    # Check if the response is a JSON report
-                    if response_data.get("agent_type") == "riskmanaging" and isinstance(response_data.get("response"), str):
-                        try:
-                            # The response content itself might be a JSON string from the backend
-                            report_content = json.loads(response_data["response"])
-                            
+                    response_type = response_data.get("type")
+                    response_message = response_data.get("message")
+                    
+                    if response_type == "report":
+                        report_content = response_data.get("report", {})
+                        if report_content:
                             # Add timestamp to report for history
                             report_content["timestamp"] = time.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -378,17 +385,21 @@ def main():
                             
                             display_risk_report(report_content)
                             st.toast("✅ 리스크 분석 보고서가 생성되었습니다!", icon="🛡️")
-
-                        except json.JSONDecodeError:
-                            # If it's a string but not a valid JSON for a report, treat as regular message
-                            ai_message = response_data.get("response", "응답을 받지 못했습니다.")
-                            st.session_state.messages.append({"role": "assistant", "content": ai_message})
-                            display_message("assistant", ai_message)
+                        else:
+                            st.error("응답에 리포트 데이터가 없습니다.")
+                            st.session_state.messages.append({"role": "assistant", "content": "보고서 데이터가 없습니다."})
+                            display_message("assistant", "보고서 데이터가 없습니다.")
+                    elif response_type == "chat":
+                        st.session_state.messages.append({"role": "assistant", "content": response_message})
+                        display_message("assistant", response_message)
+                    elif response_type == "error":
+                        st.error(f"백엔드 오류: {response_message}")
+                        st.session_state.messages.append({"role": "assistant", "content": f"오류: {response_message}"})
+                        display_message("assistant", f"오류: {response_message}")
                     else:
-                        # Regular AI message
-                        ai_message = response_data.get("response", "응답을 받지 못했습니다.")
-                        st.session_state.messages.append({"role": "assistant", "content": ai_message})
-                        display_message("assistant", ai_message)
+                        st.error(f"알 수 없는 응답 타입: {response_type}")
+                        st.session_state.messages.append({"role": "assistant", "content": f"알 수 없는 응답 타입: {response_type}"})
+                        display_message("assistant", f"알 수 없는 응답 타입: {response_type}")
                 else:
                     st.error("서버와 통신할 수 없습니다. 백엔드 서버가 실행 중인지 확인해주세요.")
 

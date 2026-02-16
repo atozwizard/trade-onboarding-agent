@@ -1,0 +1,24 @@
+# STEP 완료 보고: STEP 4 — 리팩토링 시작
+
+**STEP 4가 성공적으로 완료되었습니다.** 주요 리팩토링 작업이 수행되었습니다.
+
+**수행된 리팩토링 내용:**
+
+1.  **Orchestrator의 LLM 기반 의도 분류 구현 (`backend/agents/orchestrator.py`)**:
+    *   `orchestrator_intent_prompt.txt` 프롬프트 파일을 새로 생성하여 LLM의 의도 분류 지침을 명확히 했습니다.
+    *   `Orchestrator` 클래스에 `_load_prompt` 함수와 `_classify_intent_with_llm` 메서드를 추가하여 사용자 입력의 의도를 LLM을 통해 동적으로 분류하도록 변경했습니다.
+    *   `_detect_intent_and_route` 메서드를 수정하여 기존의 트리거 단어 및 유사성 기반 라우팅 로직을 LLM 기반 의도 분류로 대체하고, `active_agent` 및 `context["mode"]` 우선순위는 유지했습니다.
+    *   `out_of_scope`로 분류된 요청은 `default_chat` Agent로 라우팅되도록 처리했습니다.
+2.  **QuizAgent 및 EmailAgent 활성화 (`backend/agents/orchestrator.py`)**:
+    *   `backend/agents/orchestrator.py` 파일 내 `AGENT_CLASS_MAPPING`에 `QuizAgent`와 `EmailAgent`를 활성화하고, 관련 `import` 문도 추가했습니다.
+    *   `run` 메서드 내 Agent 호출 로직을 수정하여 `RiskManagingAgent`는 기존의 다중 턴 (`conversation_history`, `analysis_in_progress`)을 유지하고, `QuizAgent`, `EmailAgent`, `DefaultChatAgent`는 단일 턴 (`user_input`, `context`) 방식으로 호출되도록 분기 처리했습니다.
+3.  **RiskManagingAgent의 RAG Connector 개선 (`backend/agents/riskmanaging/rag_connector.py`)**:
+    *   `backend.rag.retriever.search` 대신 `backend.rag.retriever.search_with_filter`를 사용하도록 변경했습니다.
+    *   `get_risk_documents` 메서드를 수정하여 `backend/agents/riskmanaging/config.py`에 정의된 `RAG_DATASETS` 목록의 각 항목을 `document_type` 필터로 사용하여 더 정교한 검색을 수행하도록 했습니다.
+    *   검색된 문서의 중복을 제거하고, 각 `document_type`에서 `DEFAULT_RAG_K_PER_TYPE` (3개)의 문서를 검색하도록 설정하여 RAG 검색의 효율성과 정확도를 높였습니다.
+4.  **불필요한 코드 제거 (`backend/agents/orchestrator.py`)**:
+    *   LLM 기반 의도 분류로 대체됨에 따라 사용되지 않게 된 `similarity_engine` 초기화 및 관련 코드를 `Orchestrator.__init__`에서 제거했습니다. 또한 `ORCHESTRATOR_AGENT_TRIGGER_MAP` 및 `ORCHESTRATOR_SIMILARITY_THRESHOLD` 정의도 제거했습니다.
+
+이로써 시스템의 핵심 라우팅 로직이 LLM 기반으로 전환되었고, `QuizAgent`와 `EmailAgent`가 활성화되었으며, `RiskManagingAgent`의 RAG 활용이 더욱 정교해졌습니다.
+
+다음 지시를 기다립니다.
