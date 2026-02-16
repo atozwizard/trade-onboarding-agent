@@ -48,44 +48,25 @@ def get_document_retriever() -> DocumentRetriever:
     return retriever
 
 
-def create_email_agent(
-    llm: LLMGateway = None,
-    retriever: DocumentRetriever = None
-) -> BaseAgent:
-    """
-    Email Agent 인스턴스 생성 (직접 호출용)
-
-    Args:
-        llm: LLM Gateway (None이면 자동 생성)
-        retriever: Document Retriever (None이면 자동 생성)
-
-    Returns:
-        BaseAgent: Email Coach Agent
-    """
-    from backend.agents.email import EmailCoachAgent
-
-    if llm is None:
-        llm = get_llm_gateway()
-    if retriever is None:
-        retriever = get_document_retriever()
-
-    agent = EmailCoachAgent(llm=llm, retriever=retriever)
-    logger.info("Email Agent created")
-    return agent
-
-
-def get_email_agent(
-    llm: LLMGateway = Depends(get_llm_gateway),
-    retriever: DocumentRetriever = Depends(get_document_retriever)
-) -> BaseAgent:
-    """
-    Email Agent 의존성 주입 (FastAPI Depends 전용)
-
-    Args:
-        llm: LLM Gateway (FastAPI가 자동 주입)
-        retriever: Document Retriever (FastAPI가 자동 주입)
-
-    Returns:
-        BaseAgent: Email Coach Agent
-    """
-    return create_email_agent(llm, retriever)
+# DEPRECATED: Legacy email agent functions (2026-02-16)
+# The modular EmailCoachAgent has been replaced by LangGraph-based email_agent
+# These functions are no longer used in routes.py (orchestrator handles routing)
+#
+# def create_email_agent(
+#     llm: LLMGateway = None,
+#     retriever: DocumentRetriever = None
+# ) -> BaseAgent:
+#     """
+#     Email Agent 인스턴스 생성 (직접 호출용)
+#     """
+#     from backend.agents.email import EmailCoachAgent  # Now in docs/YYK/trash/
+#     ...
+#
+# def get_email_agent(
+#     llm: LLMGateway = Depends(get_llm_gateway),
+#     retriever: DocumentRetriever = Depends(get_document_retriever)
+# ) -> BaseAgent:
+#     """
+#     Email Agent 의존성 주입 (FastAPI Depends 전용)
+#     """
+#     return create_email_agent(llm, retriever)
