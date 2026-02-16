@@ -13,13 +13,22 @@ from backend.config import get_settings
 from backend.api import routes
 from backend.rag.chroma_client import get_or_create_collection
 from backend.rag.ingest import ingest_data
-import logging
+from backend.utils.logger import setup_logging, get_logger
 
 # 로깅 설정
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 settings = get_settings()
+setup_logging(environment=settings.environment, app_name="trade_onboarding")
+logger = get_logger(__name__)
+
+# LangSmith 트레이싱 설정
+# @traceable 데코레이터는 LANGSMITH_API_KEY를 참조하므로 두 변수 모두 설정
+if settings.langsmith_tracing and settings.langsmith_api_key:
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_API_KEY"] = settings.langsmith_api_key
+    os.environ["LANGCHAIN_PROJECT"] = settings.langsmith_project
+    os.environ["LANGSMITH_API_KEY"] = settings.langsmith_api_key
+    os.environ["LANGSMITH_TRACING"] = "true"
+    os.environ["LANGSMITH_PROJECT"] = settings.langsmith_project
 
 app = FastAPI(
     title="Trade Onboarding AI Coach",

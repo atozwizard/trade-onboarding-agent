@@ -107,4 +107,3 @@ graph TD
     style M fill:#add8e6,stroke:#333,stroke-width:2px
     style N fill:#add8e6,stroke:#333,stroke-width:2px
     style O fill:#f0e68c,stroke:#333,stroke-width:2px
-```
