@@ -117,8 +117,9 @@ class RiskManagingAgent:
         }
 
         # Invoke the compiled graph
-        # Since this is a synchronous run method, we use .invoke()
-        final_state = compiled_risk_managing_app.invoke(initial_state)
+        # Use asyncio.run() for consistency with other agents
+        import asyncio
+        final_state = asyncio.run(compiled_risk_managing_app.ainvoke(initial_state))
 
         # Extract the final agent_response (RiskManagingAgentResponse object)
         agent_response_obj = final_state.get("agent_response")
