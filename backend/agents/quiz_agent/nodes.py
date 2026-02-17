@@ -15,6 +15,7 @@ sys.path.append(project_root)
 
 # Local imports
 from backend.config import get_settings
+from backend.utils.logger import get_logger
 # RAG functionality now provided by tools.py
 from backend.agents.quiz_agent.state import QuizGraphState
 
@@ -27,6 +28,7 @@ QUIZ_FALLBACK_REFERENCE = """
 - B/L (Bill of Lading): 선하증권으로, 운송계약 및 화물 인수 증빙 문서입니다.
 - HS Code: 국제 통일상품분류체계 코드로 관세율과 통관 요건 판단에 사용됩니다.
 """.strip()
+logger = get_logger(__name__)
 
 
 def _parse_json_flexible(text: str) -> Optional[Any]:
@@ -129,7 +131,7 @@ class QuizAgentComponents:
                 api_key=self.settings.upstage_api_key
             )
         else:
-            print("Warning: UPSTAGE_API_KEY is not set for QuizAgent. LLM calls will fail.")
+            logger.warning("UPSTAGE_API_KEY is not set for QuizAgent. LLM calls will fail.")
         
         # Configure Langsmith tracing - if not configured by Orchestrator
         if self.settings.langsmith_tracing and self.settings.langsmith_api_key:
@@ -170,7 +172,7 @@ def perform_rag_search_node(state: QuizGraphState) -> Dict[str, Any]:
         )
         used_rag = len(retrieved_documents) > 0
     except Exception as e:
-        print(f"Error during RAG search: {e}")
+        logger.warning("Error during quiz RAG search: %s", e)
         retrieved_documents = []
         used_rag = False
 
@@ -326,16 +328,19 @@ def call_llm_and_parse_response_node(state: QuizGraphState) -> Dict[str, Any]:
                 else:
                     final_response_content = llm_response_content
             except json.JSONDecodeError:
-                print(f"Warning: LLM response was not valid JSON. Response: {llm_response_content[:100]}...")
+                logger.debug(
+                    "QuizAgent LLM response was not valid JSON (truncated): %s",
+                    llm_response_content[:200],
+                )
                 final_response_content = llm_response_content
                 llm_output_details = {"raw_llm_response": llm_response_content}
             
         except openai.APIError as e:
-            print(f"Upstage API Error: {e}")
+            logger.warning("QuizAgent Upstage API error: %s", e)
             final_response_content = f"LLM API 호출 중 오류가 발생했습니다: {e}"
             llm_output_details = {"error": str(e)}
         except Exception as e:
-            print(f"An unexpected error occurred during LLM call: {e}")
+            logger.warning("QuizAgent unexpected LLM error: %s", e)
             final_response_content = f"LLM 호출 중 예상치 못한 오류가 발생했습니다: {e}"
             llm_output_details = {"error": str(e)}
     else:

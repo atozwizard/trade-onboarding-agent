@@ -15,6 +15,7 @@ sys.path.append(project_root)
 
 # Local imports
 from backend.config import get_settings
+from backend.utils.logger import get_logger
 # RAG and validation functionality now provided by tools.py
 from backend.agents.email_agent.state import EmailGraphState
 
@@ -44,6 +45,7 @@ EMAIL_TRAILING_REVIEW_PATTERNS = [
     "review please",
     "please review",
 ]
+logger = get_logger(__name__)
 
 
 def _contains_any(text: str, keywords: List[str]) -> bool:
@@ -255,7 +257,7 @@ def _build_rule_based_review(
     try:
         risks = detect_email_risks.invoke({"email_content": email_content}) or []
     except Exception as exc:
-        print(f"Rule-based risk detection failed: {exc}")
+        logger.warning("Rule-based risk detection failed: %s", exc)
 
     try:
         tone_result = analyze_email_tone.invoke(
@@ -266,7 +268,7 @@ def _build_rule_based_review(
             }
         ) or {}
     except Exception as exc:
-        print(f"Rule-based tone analysis failed: {exc}")
+        logger.warning("Rule-based tone analysis failed: %s", exc)
 
     lines: List[str] = []
     lines.append("### 이메일 리뷰 요약")
@@ -324,7 +326,7 @@ class EmailAgentComponents:
                 api_key=self.settings.upstage_api_key
             )
         else:
-            print("Warning: UPSTAGE_API_KEY is not set for EmailAgent. LLM calls will fail.")
+            logger.warning("UPSTAGE_API_KEY is not set for EmailAgent. LLM calls will fail.")
         
         # Configure Langsmith tracing - if not configured by Orchestrator
         if self.settings.langsmith_tracing and self.settings.langsmith_api_key:
@@ -368,7 +370,7 @@ def perform_rag_search_node(state: EmailGraphState) -> Dict[str, Any]:
         )
         used_rag = len(retrieved_documents) > 0
     except Exception as e:
-        print(f"Error during RAG search: {e}")
+        logger.warning("Error during email RAG search: %s", e)
         retrieved_documents = []
         used_rag = False
 
@@ -560,7 +562,10 @@ def call_llm_and_parse_response_node(state: EmailGraphState) -> Dict[str, Any]:
                 else:
                     final_response_content = llm_response_content
             except json.JSONDecodeError:
-                print(f"Warning: LLM response was not valid JSON. Response: {llm_response_content[:100]}...")
+                logger.debug(
+                    "EmailAgent LLM response was not valid JSON (truncated): %s",
+                    llm_response_content[:200],
+                )
                 final_response_content = llm_response_content
                 llm_output_details = {"raw_llm_response": llm_response_content}
 
@@ -593,7 +598,7 @@ def call_llm_and_parse_response_node(state: EmailGraphState) -> Dict[str, Any]:
                     }
             
         except openai.APIError as e:
-            print(f"Upstage API Error: {e}")
+            logger.warning("EmailAgent Upstage API error: %s", e)
             if task_type == "review" and extracted_email_content:
                 final_response_content = _build_rule_based_review(
                     extracted_email_content,
@@ -604,7 +609,7 @@ def call_llm_and_parse_response_node(state: EmailGraphState) -> Dict[str, Any]:
                 final_response_content = f"LLM API 호출 중 오류가 발생했습니다: {e}"
             llm_output_details = {"error": str(e)}
         except Exception as e:
-            print(f"An unexpected error occurred during LLM call: {e}")
+            logger.warning("EmailAgent unexpected LLM error: %s", e)
             if task_type == "review" and extracted_email_content:
                 final_response_content = _build_rule_based_review(
                     extracted_email_content,

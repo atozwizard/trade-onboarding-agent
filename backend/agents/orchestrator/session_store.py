@@ -7,9 +7,11 @@ from typing import Dict, Any, Optional
 from abc import ABC, abstractmethod
 
 import redis
-from redis.connection import ConnectionPool
 
 from backend.config import get_settings
+from backend.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class ConversationStore(ABC):
@@ -89,26 +91,32 @@ class RedisConversationStore(ConversationStore):
                     encoding='utf-8'
                 )
             else:
-                # Use individual connection parameters
-                pool = ConnectionPool(
-                    host=settings.redis_host,
-                    port=settings.redis_port,
-                    password=settings.redis_password if settings.redis_password else None,
-                    db=settings.redis_db,
-                    ssl=settings.redis_ssl,
-                    decode_responses=True,
-                    encoding='utf-8',
-                    max_connections=10
-                )
-                self.redis_client = redis.Redis(connection_pool=pool)
+                # Use individual connection parameters.
+                # NOTE:
+                # Passing `ssl` to low-level ConnectionPool can break on 일부 redis-py
+                # connection classes. Construct Redis client directly for compatibility.
+                redis_kwargs = {
+                    "host": settings.redis_host,
+                    "port": settings.redis_port,
+                    "db": settings.redis_db,
+                    "decode_responses": True,
+                    "encoding": "utf-8",
+                    "max_connections": 10,
+                }
+                if settings.redis_password:
+                    redis_kwargs["password"] = settings.redis_password
+                if settings.redis_ssl:
+                    redis_kwargs["ssl"] = True
+
+                self.redis_client = redis.Redis(**redis_kwargs)
 
             # Test connection
             self.redis_client.ping()
-            print(f"✅ Redis connection established (TTL: {self.ttl}s)")
+            logger.info("Redis connection established (TTL=%ss)", self.ttl)
 
         except redis.ConnectionError as e:
-            print(f"❌ Redis connection failed: {e}")
-            print("⚠️ Falling back to InMemoryConversationStore")
+            logger.warning("Redis connection failed: %s", e)
+            logger.warning("Falling back to InMemoryConversationStore")
             raise
 
     def _make_key(self, session_id: str) -> str:
@@ -128,10 +136,10 @@ class RedisConversationStore(ConversationStore):
             return state
 
         except redis.RedisError as e:
-            print(f"Redis get_state error for {session_id}: {e}")
+            logger.warning("Redis get_state error for %s: %s", session_id, e)
             return None
         except json.JSONDecodeError as e:
-            print(f"JSON decode error for session {session_id}: {e}")
+            logger.warning("JSON decode error for session %s: %s", session_id, e)
             return None
 
     def save_state(self, session_id: str, state: Dict[str, Any]):
@@ -149,9 +157,9 @@ class RedisConversationStore(ConversationStore):
             )
 
         except redis.RedisError as e:
-            print(f"Redis save_state error for {session_id}: {e}")
+            logger.warning("Redis save_state error for %s: %s", session_id, e)
         except (TypeError, ValueError) as e:
-            print(f"JSON encode error for session {session_id}: {e}")
+            logger.warning("JSON encode error for session %s: %s", session_id, e)
 
     def delete_state(self, session_id: str):
         try:
@@ -159,7 +167,7 @@ class RedisConversationStore(ConversationStore):
             self.redis_client.delete(key)
 
         except redis.RedisError as e:
-            print(f"Redis delete_state error for {session_id}: {e}")
+            logger.warning("Redis delete_state error for %s: %s", session_id, e)
 
     def create_new_session_id(self) -> str:
         return str(uuid.uuid4())
@@ -173,7 +181,7 @@ class RedisConversationStore(ConversationStore):
             key = self._make_key(session_id)
             self.redis_client.expire(key, self.ttl)
         except redis.RedisError as e:
-            print(f"Redis extend_ttl error for {session_id}: {e}")
+            logger.warning("Redis extend_ttl error for %s: %s", session_id, e)
 
     def get_all_session_ids(self) -> list[str]:
         """
@@ -184,7 +192,7 @@ class RedisConversationStore(ConversationStore):
             keys = self.redis_client.keys("session:*")
             return [key.replace("session:", "") for key in keys]
         except redis.RedisError as e:
-            print(f"Redis get_all_session_ids error: {e}")
+            logger.warning("Redis get_all_session_ids error: %s", e)
             return []
 
 
@@ -201,11 +209,11 @@ def create_conversation_store() -> ConversationStore:
     if settings.use_redis_session:
         try:
             store = RedisConversationStore(settings)
-            print("🚀 Using RedisConversationStore for session management")
+            logger.info("Using RedisConversationStore for session management")
             return store
         except Exception as e:
-            print(f"⚠️ Failed to initialize Redis: {e}")
-            print("🔄 Falling back to InMemoryConversationStore")
+            logger.warning("Failed to initialize Redis: %s", e)
+            logger.info("Falling back to InMemoryConversationStore")
 
-    print("💾 Using InMemoryConversationStore (development mode)")
+    logger.info("Using InMemoryConversationStore (development mode)")
     return InMemoryConversationStore()

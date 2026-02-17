@@ -2,6 +2,7 @@
 from typing import List, Dict, Optional, Any
 from typing import Callable, Literal
 from langgraph.graph import StateGraph, END
+from backend.utils.logger import get_logger
 
 # Internal imports
 from backend.agents.base import BaseAgent
@@ -16,22 +17,25 @@ from backend.agents.riskmanaging.nodes import (
 )
 
 # Define conditional edges decision logic
+logger = get_logger(__name__)
+
+
 def decide_next_step(state: RiskManagingGraphState) -> Literal["assess_conversation", "format_output"]:
     # After detect_trigger_and_similarity_node, if analysis is not required, directly format output (e.g., no trigger, early exit).
     if not state.get("analysis_required", False):
-        print("---Graph: decide_next_step -> format_output (not analysis_required)---")
+        logger.debug("Graph decision: format_output (analysis_required=False)")
         return "format_output"
     # Otherwise, analysis is required, proceed to assess conversation progress
-    print("---Graph: decide_next_step -> assess_conversation (analysis_required)---")
+    logger.debug("Graph decision: assess_conversation (analysis_required=True)")
     return "assess_conversation"
 
 def decide_after_conversation_assessment(state: RiskManagingGraphState) -> Literal["perform_full_analysis", "format_output"]:
     # After assess_conversation_progress_node, check if analysis is ready.
     if state.get("analysis_ready", False):
-        print("---Graph: decide_after_conversation_assessment -> perform_full_analysis (analysis_ready)---")
+        logger.debug("Graph decision: perform_full_analysis (analysis_ready=True)")
         return "perform_full_analysis"
     # If not ready, it means we need more info, and the CM would have set the agent_response with follow-up questions.
-    print("---Graph: decide_after_conversation_assessment -> format_output (not analysis_ready, need more info)---")
+    logger.debug("Graph decision: format_output (analysis_ready=False)")
     return "format_output"
 
 
@@ -141,5 +145,4 @@ class RiskManagingAgent(BaseAgent):
             "conversation_history": final_state.get("conversation_history", conversation_history),
             "analysis_in_progress": final_state.get("analysis_in_progress", False)
         }
-
 
