@@ -109,11 +109,12 @@ CONVERSATION_ASSESSMENT_PROMPT = """
 
 <평가 항목>
 -   **상황 명확성:** 사용자 질의의 핵심 상황이 명확한가? (예: 특정 프로젝트, 거래, 사건)
--   **관련 정보:** 리스크 평가에 필요한 최소한의 정보(계약 금액, 페널티 정보, 예상 손실)가 포함되어 있는가?
--   **모호성 여부:** 추가적인 질문 없이 바로 리스크 분석으로 넘어가면 잘못된 분석 결과를 낼 가능성이 있는가?
+-   **유연한 판단 (최우선):** 사용자가 정보를 더 이상 제공할 수 없다고 명시하거나(예: "모른다", "그냥 해줘", "정보가 이게 전부다"), 현재 정보만으로도 일반적인 무역 리스크 관례에 기반한 가설적 조언이 가능하다면 무조건 **"sufficient"**로 판단하고 분석 단계로 넘어가십시오.
+-   **관련 정보:** 리스크 평가에 필요한 최소한의 정보(계약 금액, 페널티 정보, 예상 손실)가 포함되어 있는가? (부족해도 가설을 세울 수 있다면 진행 가능)
+-   **모호성 여부:** 추가적인 질문 없이 바로 리스크 분석으로 넘어가면 잘못된 분석 결과를 낼 가능성이 있는가? (단, 가설 기반임을 명시하고 진행하면 됨)
 
-정보가 충분하다고 판단되면, 아래 JSON 형식으로 응답하여 분석 단계로 진행할 것을 지시하십시오.
-정보가 불충분하다고 판단되면, 아래 JSON 형식으로 응답하여 사용자에게 추가 질문을 하십시오.
+사용자가 정보를 더 주기를 거부하거나 지금 바로 분석을 원한다면, 반드시 **"sufficient"**를 반환하십시오.
+정보가 절대적으로 부족하고(예: 상황조차 모름) 사용자가 아직 정보를 더 줄 의사가 있는 경우에만 **"insufficient"**로 판단하십시오.
 
 <응답 형식>
 ```json
@@ -131,6 +132,9 @@ CONVERSATION_ASSESSMENT_PROMPT = """
     }}
 }}
 ```
+<이미 파악된 정보>
+{{extracted_data}}
+
 <대화 내용>
 {{conversation_history}}
 
@@ -146,8 +150,14 @@ RISK_ENGINE_EVALUATION_PROMPT = """
 다음 평가 항목별로 영향도(Impact 1-5), 발생 가능성(Likelihood 1-5)을 엄격하게 평가하고,
 각각에 대한 구체적인 판단 근거를 "회사 기준", "실무 기준", "실제 발생 가능한 리스크", "내부 보고 기준" 관점에서 설명하십시오.
 
+**중요 지침:**
+데이터가 부족한 항목(예: 계약 금액 미상, 페널티 조항 불분명 등)에 대해서는 **일반적인 무역 관행, 인코텀즈(Incoterms) 규정, 또는 유사 업계 사례를 바탕으로 가설(Hypothesis)을 세워 분석을 진행**하십시오. "정보가 없어서 분석 불가"라고 대답하지 말고, "통상적인 경우 ~하므로 ~한 리스크가 예상된다"는 식으로 조언하십시오.
+
 <평가 항목>
 {{risk_evaluation_items_json}}
+
+<이미 파악된 정보>
+{{extracted_data}}
 
 <사용자 질의>
 {{user_input}}
@@ -398,13 +408,13 @@ class ConversationManager:
             base_url="https://api.upstage.ai/v1/solar"
         )
     
-    @traceable(name="conversation_manager_assess")
-    def assess_conversation_progress(self, agent_input: RiskManagingAgentInput) -> Dict[str, Any]:
+    def assess_conversation_progress(self, agent_input: RiskManagingAgentInput, extracted_data: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Assess if enough information has been collected for risk analysis.
         
         Args:
             agent_input: User input and conversation history
+            extracted_data: Previously extracted information
         
         Returns:
             Dict containing status, analysis_ready, message, follow_up_questions, extracted_data
@@ -414,10 +424,14 @@ class ConversationManager:
             for turn in (agent_input.conversation_history or [])
         ])
         
+        extracted_data_str = json.dumps(extracted_data or {}, ensure_ascii=False, indent=2)
+
         prompt = CONVERSATION_ASSESSMENT_PROMPT.replace(
             "{{conversation_history}}", conversation_history_str
         ).replace(
             "{{user_input}}", agent_input.user_input
+        ).replace(
+            "{{extracted_data}}", extracted_data_str
         )
         
         try:
@@ -566,12 +580,12 @@ class RiskEngine:
             base_url="https://api.upstage.ai/v1/solar"
         )
     
-    @traceable(name="risk_engine_evaluate")
     def evaluate_risk(
         self,
         agent_input: RiskManagingAgentInput,
         rag_documents: List[Dict[str, Any]],
-        user_profile: Optional[Dict[str, Any]] = None
+        user_profile: Optional[Dict[str, Any]] = None,
+        extracted_data: Optional[Dict[str, Any]] = None
     ) -> RiskScoring:
         """
         Evaluate risk based on user input and RAG documents.
@@ -579,6 +593,7 @@ class RiskEngine:
         Args:
             agent_input: User input and context
             rag_documents: Retrieved documents from RAG
+            extracted_data: Previously extracted info
         
         Returns:
             RiskScoring object with risk factors and assessment
@@ -597,6 +612,7 @@ class RiskEngine:
         
         # Prepare risk evaluation items
         risk_items_str = json.dumps(RISK_EVALUATION_ITEMS, ensure_ascii=False, indent=2)
+        extracted_data_str = json.dumps(extracted_data or {}, ensure_ascii=False, indent=2)
         
         prompt = RISK_ENGINE_EVALUATION_PROMPT.replace(
             "{{risk_evaluation_items_json}}", risk_items_str
@@ -606,6 +622,8 @@ class RiskEngine:
             "{{conversation_history}}", conversation_history_str
         ).replace(
             "{{rag_documents}}", rag_docs_str if rag_docs_str else "관련 문서 없음"
+        ).replace(
+            "{{extracted_data}}", extracted_data_str
         )
         
         try:
@@ -961,11 +979,21 @@ def assess_conversation_progress_node(state: RiskManagingGraphState) -> Dict[str
     )
     
     conversation_manager = ConversationManager() # Initialize here
-    assessment_result = conversation_manager.assess_conversation_progress(agent_input)
+    assessment_result = conversation_manager.assess_conversation_progress(agent_input, state.get("extracted_data"))
     
     # Update state based on assessment result
+    # Merge extracted_data to prevent losing previously collected information
+    old_extracted_data = state.get("extracted_data", {})
+    new_extracted_data = assessment_result.get("extracted_data", {})
+    
+    # Merge: if new has value, use it; otherwise keep old
+    merged_data = old_extracted_data.copy()
+    for k, v in new_extracted_data.items():
+        if v is not None and v != "":
+            merged_data[k] = v
+
     state_updates = {
-        "extracted_data": assessment_result.get("extracted_data"),
+        "extracted_data": merged_data,
         "analysis_ready": assessment_result.get("analysis_ready", False),
         "conversation_stage": assessment_result.get("conversation_stage", "gathering_info"),
         "analysis_in_progress": assessment_result.get("analysis_in_progress", True),
@@ -1005,7 +1033,12 @@ def perform_full_analysis_node(state: RiskManagingGraphState) -> Dict[str, Any]:
     
     # 2. Risk Engine
     risk_engine = RiskEngine()
-    risk_scoring = risk_engine.evaluate_risk(agent_input, rag_documents, user_profile=user_profile)
+    risk_scoring = risk_engine.evaluate_risk(
+        agent_input, 
+        rag_documents, 
+        user_profile=user_profile,
+        extracted_data=state.get("extracted_data")
+    )
 
     # 3. Report Generator
     report_generator = ReportGenerator()

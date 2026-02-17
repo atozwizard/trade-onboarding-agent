@@ -77,6 +77,32 @@ def test_user_persona():
     else:
         print("RESULT: FAIL (Style NOT Adapted)")
 
+def test_hypothesis_analysis():
+    print("\n--- [Test 3] Hypothesis-based Analysis (Missing Info) ---")
+    agent = RiskManagingAgent()
+    # Provide MINIMAL info and explicitly say "don't know/just do it"
+    user_input = "선적 지연이 발생했는데, 아직 정확한 계약 규모나 페널티 조항은 몰라. 그래도 아는 범위 내에서 리스크 분석해줄 수 있어?"
+    
+    print(f"Query: {user_input}")
+    result = agent.run(
+        user_input=user_input,
+        conversation_history=[],
+        analysis_in_progress=False
+    )
+    
+    response_data = result['response']['response']
+    # If it's a full analysis, the response will be a JSON-like string (or object) containing risk_scoring
+    is_analytical = "risk_scoring" in str(response_data) or "loss_simulation" in str(response_data)
+    
+    print("\n[AI Response Summary]")
+    print(str(response_data)[:1000]) 
+    
+    if is_analytical:
+        print("\nRESULT: PASS (Hypothesis-based Analysis Performed)")
+    else:
+        print("\nRESULT: FAIL (Still asking for info or stuck)")
+
 if __name__ == "__main__":
     test_risk_knowledge()
     test_user_persona()
+    test_hypothesis_analysis()
