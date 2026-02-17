@@ -6,7 +6,7 @@
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.28+-red.svg)](https://streamlit.io/)
+[![React](https://img.shields.io/badge/React-18+-61dafb.svg)](https://react.dev/)
 
 > 이 문서는 사용자/운영자용 가이드입니다. 개발자 구현 규칙과 내부 아키텍처 작업 기준은 `CLAUDE.md`를 기준으로 확인하세요.
 
@@ -38,7 +38,7 @@ TradeOnboarding Chatbot은 무역회사 신입사원이 **채팅 대화**를 통
 ### 주요 특징
 
 🗨️ **대화형 인터페이스**
-- Streamlit 채팅 UI로 자연스러운 학습 경험
+- React 채팅 UI로 자연스러운 학습 경험
 - 멀티턴 대화 지원으로 심층 코칭 가능
 - 실시간 피드백과 구조화된 보고서 제공
 
@@ -64,7 +64,7 @@ TradeOnboarding Chatbot은 무역회사 신입사원이 **채팅 대화**를 통
 
 ```mermaid
 graph LR
-    A[👤 신입사원] -->|채팅 시작| B[💬 Streamlit UI]
+    A[👤 신입사원] -->|채팅 시작| B[💬 React UI]
     B -->|메시지 전송| C[🎯 Orchestrator]
     C -->|자동 라우팅| D{전문 에이전트}
     D --> E[📝 QuizAgent<br/>퀴즈 학습]
@@ -289,18 +289,20 @@ uv run uvicorn backend.main:app --reload
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
 
-#### 터미널 2: 프론트엔드 (Streamlit)
+#### 터미널 2: 프론트엔드 (React + Vite)
 
 ```bash
-uv run streamlit run frontend/app.py
+cd frontend
+npm install
+npm run dev
 ```
 
 ✅ UI 실행 확인:
-- Streamlit UI: http://localhost:8501
+- React UI: http://localhost:3000
 
 ### 첫 사용
 
-1. **Streamlit UI 접속**: http://localhost:8501
+1. **React UI 접속**: http://localhost:3000
 2. **메시지 입력**: "FOB 관련 퀴즈 풀고 싶어요"
 3. **에이전트 자동 라우팅**: Orchestrator가 QuizAgent로 라우팅
 4. **응답 확인**: 5문제 퀴즈 생성 및 표시
@@ -325,7 +327,7 @@ uv run streamlit run frontend/app.py
 
 ```mermaid
 graph TD
-    Start([Streamlit UI 접속]) --> Input[채팅 입력창에 메시지 입력]
+    Start([React UI 접속]) --> Input[채팅 입력창에 메시지 입력]
     Input --> Auto{Orchestrator<br/>자동 라우팅}
 
     Auto -->|"FOB 퀴즈"| QuizFlow[📝 QuizAgent]
@@ -511,7 +513,7 @@ graph TD
 ```mermaid
 graph TB
     subgraph Frontend [Frontend Layer]
-        UI[Streamlit 1.28+]
+        UI[React 18 + Vite 5+]
     end
 
     subgraph Backend [Backend Layer]
@@ -547,7 +549,7 @@ graph TB
 | 레이어 | 기술 | 버전 | 역할 |
 |--------|------|------|------|
 | **패키지 관리** | uv | latest | 빠른 Python 패키지 매니저 |
-| **프론트엔드** | Streamlit | 1.28+ | 채팅 UI 및 대화 인터페이스 |
+| **프론트엔드** | React + Vite | React 18+, Vite 5+ | 채팅 UI 및 대화 인터페이스 |
 | **백엔드 API** | FastAPI | 0.104+ | RESTful API 서버 |
 | **언어** | Python | 3.11+ | 주 개발 언어 |
 | **LLM** | Upstage Solar API | solar-pro2 | 자연어 이해 및 생성 |
@@ -629,8 +631,13 @@ trade-onboarding-agent/
 │   └── vectorstore/                # ChromaDB 저장소 (gitignore)
 │       └── chroma.sqlite3         # 벡터 DB 파일
 │
-├── frontend/                        # Streamlit UI
-│   └── app.py                      # 채팅 인터페이스 (397줄)
+├── frontend/                        # React UI (Vite)
+│   ├── src/
+│   │   ├── App.jsx                 # 채팅 인터페이스 메인 컴포넌트
+│   │   ├── components/ReportCard.jsx
+│   │   └── lib/normalizers.js      # 응답 파싱/정규화 유틸
+│   ├── package.json                # 프론트엔드 의존성/스크립트
+│   └── vite.config.js              # Vite 개발 서버 설정
 │
 ├── dataset/                         # 원본 데이터셋 (JSON)
 │   ├── icc_trade_terms.json       # ICC 무역용어집 284 records
@@ -663,7 +670,7 @@ trade-onboarding-agent/
 | 파일 | 라인 수 | 설명 |
 |------|--------|------|
 | `backend/agents/orchestrator.py` | 400줄 | 중앙 라우팅, LLM 인텐트 분류, 세션 관리 |
-| `frontend/app.py` | 397줄 | Streamlit 채팅 UI, 메시지 표시, 보고서 시각화 |
+| `frontend/src/App.jsx` | - | React 채팅 UI, 메시지 표시, 보고서 시각화 |
 | `backend/agents/quiz_agent.py` | 231줄 | RAG 기반 퀴즈 생성, EvalTool 품질 검증 |
 | `backend/agents/email/email_agent.py` | 163줄 | EmailAgent Facade, Draft/Review 라우팅 |
 
@@ -876,7 +883,9 @@ uv run python backend/rag/ingest.py --reset
 ```bash
 # 다른 포트 사용
 uv run uvicorn backend.main:app --reload --port 8001
-uv run streamlit run frontend/app.py --server.port 8502
+cd frontend
+npm install
+npm run dev -- --port 3001
 ```
 
 ---
@@ -892,7 +901,7 @@ MIT License
 - **Upstage**: Solar API 및 Embedding 제공
 - **LangChain**: 에이전트 프레임워크
 - **FastAPI**: 고성능 백엔드 프레임워크
-- **Streamlit**: 빠른 프론트엔드 프로토타이핑
+- **React (Vite)**: 빠른 프론트엔드 프로토타이핑
 
 ---
 
