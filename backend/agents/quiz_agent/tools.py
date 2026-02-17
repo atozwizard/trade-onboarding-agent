@@ -8,10 +8,30 @@ Tools exposed for quiz generation workflow:
 - Quiz quality validation (EvalTool integration)
 """
 
+import json
 from typing import List, Dict, Any, Optional
 from langchain.tools import tool
 from backend.rag.retriever import search as rag_search
+from backend.rag.retriever import search_with_filter
 from backend.config import get_settings
+
+
+def _dedupe_and_rank(results: List[Dict[str, Any]], k: int) -> List[Dict[str, Any]]:
+    seen = set()
+    deduped: List[Dict[str, Any]] = []
+
+    for doc in sorted(results, key=lambda item: float(item.get("distance", 10.0))):
+        key = (
+            str(doc.get("document", "")).strip(),
+            json.dumps(doc.get("metadata", {}), ensure_ascii=False, sort_keys=True),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(doc)
+        if len(deduped) >= k:
+            break
+    return deduped
 
 
 @tool
@@ -40,24 +60,61 @@ def search_trade_documents(
         >>> for doc in docs:
         ...     print(doc['document'], doc['metadata'])
     """
-    settings = get_settings()
-
-    if not settings.upstage_api_key:
-        return []
+    get_settings()  # settings access kept for side effects / config validation
 
     try:
-        # Build filter criteria
-        filters = {}
-        if document_type:
-            filters["document_type"] = document_type
-        if category:
-            filters["category"] = category
+        results: List[Dict[str, Any]] = []
+        preferred_doc_types = [
+            "trade_terminology",
+            "terminology",
+            "faq",
+            "quiz_question",
+        ]
 
-        # Perform RAG search
-        results = rag_search(query=query, k=k)
+        if document_type:
+            results.extend(
+                search_with_filter(
+                    query=query,
+                    k=max(k, 3),
+                    document_type=document_type,
+                    category=category,
+                )
+            )
+        else:
+            per_type_k = max(1, min(3, k))
+            for doc_type in preferred_doc_types:
+                results.extend(
+                    search_with_filter(
+                        query=query,
+                        k=per_type_k,
+                        document_type=doc_type,
+                        category=category,
+                    )
+                )
+
+            # Category-only probe (if requested by caller)
+            if category:
+                results.extend(
+                    search_with_filter(
+                        query=query,
+                        k=per_type_k,
+                        category=category,
+                    )
+                )
+
+        results = _dedupe_and_rank(results, k=max(k, 5))
 
         if not results:
-            return []
+            # Conservative fallback: run broad search then keep quiz-relevant doc types only.
+            broad = rag_search(query=query, k=max(k, 8))
+            filtered = [
+                doc for doc in broad
+                if str(doc.get("metadata", {}).get("document_type", "")).lower()
+                in set(preferred_doc_types)
+            ]
+            results = filtered if filtered else broad
+
+        results = _dedupe_and_rank(results, k=k)
 
         # Format results
         formatted_results = []

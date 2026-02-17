@@ -13,7 +13,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.config import get_settings
 from backend.api import routes
 from backend.rag.chroma_client import get_or_create_collection
-from backend.rag.ingest import ingest_data
+from backend.rag.ingest import (
+    ingest_data,
+    compute_dataset_fingerprint,
+    load_ingest_manifest,
+)
 from backend.utils.logger import setup_logging, get_logger
 
 # 로깅 설정
@@ -50,8 +54,32 @@ async def run_startup_tasks() -> None:
         # ChromaDB 컬렉션 가져오기 (없으면 생성)
         collection = get_or_create_collection()
         current_count = collection.count()
+        dataset_fingerprint = compute_dataset_fingerprint()
+        manifest = load_ingest_manifest()
+        previous_fingerprint = manifest.get("dataset_fingerprint")
+        dataset_changed = (
+            (previous_fingerprint != dataset_fingerprint)
+            if previous_fingerprint
+            else (current_count > 0)
+        )
+        force_reingest = bool(settings.force_reingest_on_startup)
+        should_reingest = (
+            settings.auto_ingest_on_startup
+            and (
+                force_reingest
+                or (settings.reingest_on_dataset_change and dataset_changed)
+            )
+        )
 
         logger.info(f"✅ 벡터 데이터베이스 연결 완료. 현재 문서 수: {current_count}")
+        if previous_fingerprint:
+            logger.info("📌 마지막 인덱스 fingerprint 감지")
+        elif current_count > 0:
+            logger.warning("⚠️ 인덱스 manifest가 없어 안전 모드 재인덱싱 대기 상태입니다.")
+        if dataset_changed:
+            logger.warning("⚠️ 데이터셋 변경이 감지되었습니다.")
+        if force_reingest:
+            logger.warning("⚠️ force_reingest_on_startup=true: 강제 재인덱싱 모드")
 
         # 자동 임베딩이 활성화되어 있고, 컬렉션이 비어있으면 자동으로 데이터 임베딩
         if settings.auto_ingest_on_startup and current_count == 0:
@@ -60,6 +88,14 @@ async def run_startup_tasks() -> None:
 
             # 데이터 임베딩 및 업로드
             ingest_data(reset=False)
+
+            # 업로드 후 카운트 확인
+            final_count = collection.count()
+            logger.info(f"✅ 데이터 임베딩 완료! 총 문서 수: {final_count}")
+        elif should_reingest:
+            logger.info("🔁 데이터셋 변경/강제 옵션으로 재인덱싱을 수행합니다.")
+            logger.info("⏳ 기존 컬렉션을 재구축하므로 시간이 걸릴 수 있습니다...")
+            ingest_data(reset=True)
 
             # 업로드 후 카운트 확인
             final_count = collection.count()

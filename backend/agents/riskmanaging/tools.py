@@ -9,9 +9,11 @@ Tools exposed for risk analysis workflow:
 - Similar case retrieval
 """
 
+import json
 from typing import List, Dict, Any, Optional
 from langchain.tools import tool
 from backend.rag.retriever import search as rag_search
+from backend.rag.retriever import search_with_filter
 from backend.config import get_settings
 
 
@@ -22,6 +24,45 @@ RAG_DATASETS = [
     "EMAIL", "NEGOTIATION", "QUALITY", "LOGISTICS", "INSURANCE",
     "COMMUNICATION", "risk_knowledge"
 ]
+
+DATASET_TO_DOC_TYPES = {
+    "claims": ["claim_type"],
+    "mistakes": ["common_mistake", "error_checklist"],
+    "emails": ["email"],
+    "country_rules": ["country_guideline"],
+    "negotiation": ["negotiation_strategy"],
+    "shipping": ["process_flow"],
+    "quality": ["error_checklist", "common_mistake"],
+    "logistics": ["claim_type", "process_flow", "country_guideline"],
+    "risk_knowledge": ["trade_terminology", "terminology"],
+}
+
+FALLBACK_RISK_DOC_TYPES = [
+    "claim_type",
+    "common_mistake",
+    "error_checklist",
+    "negotiation_strategy",
+    "country_guideline",
+    "process_flow",
+]
+
+
+def _dedupe_and_rank(results: List[Dict[str, Any]], k: int) -> List[Dict[str, Any]]:
+    seen = set()
+    deduped: List[Dict[str, Any]] = []
+
+    for doc in sorted(results, key=lambda item: float(item.get("distance", 10.0))):
+        key = (
+            str(doc.get("document", "")).strip(),
+            json.dumps(doc.get("metadata", {}), ensure_ascii=False, sort_keys=True),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(doc)
+        if len(deduped) >= k:
+            break
+    return deduped
 
 
 @tool
@@ -49,44 +90,57 @@ def search_risk_cases(
         >>> for case in cases:
         ...     print(case['document'])
     """
-    settings = get_settings()
-
-    if not settings.upstage_api_key:
-        return []
+    get_settings()  # settings access kept for side effects / config validation
 
     try:
-        # Default to all risk datasets if none specified
-        if datasets is None:
-            datasets = RAG_DATASETS
+        requested_datasets = datasets if datasets is not None else RAG_DATASETS
+        normalized_dataset_tokens = [str(item).strip().lower() for item in requested_datasets]
 
-        # Perform RAG search
-        results = rag_search(query=query, k=k)
+        requested_doc_types = set()
+        for token in normalized_dataset_tokens:
+            requested_doc_types.update(DATASET_TO_DOC_TYPES.get(token, []))
+
+        if not requested_doc_types:
+            requested_doc_types.update(FALLBACK_RISK_DOC_TYPES)
+
+        results: List[Dict[str, Any]] = []
+        per_type_k = max(1, min(3, k))
+        for doc_type in sorted(requested_doc_types):
+            results.extend(
+                search_with_filter(
+                    query=query,
+                    k=per_type_k,
+                    document_type=doc_type,
+                )
+            )
+
+        results = _dedupe_and_rank(results, k=max(k, 8))
 
         if not results:
-            return []
+            broad = rag_search(query=query, k=max(k, 10))
+            allowed_doc_types = {doc_type.lower() for doc_type in requested_doc_types}
+            filtered = [
+                doc
+                for doc in broad
+                if str(doc.get("metadata", {}).get("document_type", "")).lower() in allowed_doc_types
+            ]
+            results = filtered if filtered else broad
 
-        # Filter by datasets if specified
-        if datasets:
-            filtered_results = []
-            for doc in results:
-                doc_source = doc.get("metadata", {}).get("source_dataset", "")
-                # Check if document source matches any of the requested datasets
-                for dataset in datasets:
-                    if dataset.lower() in doc_source.lower():
-                        filtered_results.append(doc)
-                        break
-            results = filtered_results if filtered_results else results
+        results = _dedupe_and_rank(results, k=k)
 
         # Format results
         formatted_results = []
         for doc in results:
-            formatted_results.append({
-                "document": doc["document"],
-                "metadata": doc.get("metadata", {}),
-                "source": doc.get("metadata", {}).get("source_dataset", "unknown"),
-                "category": doc.get("metadata", {}).get("category", "unknown"),
-                "priority": doc.get("metadata", {}).get("priority", "medium")
-            })
+                formatted_results.append({
+                    "document": doc["document"],
+                    "metadata": doc.get("metadata", {}),
+                    "source": doc.get("metadata", {}).get("source_dataset", "unknown"),
+                    "category": (
+                        doc.get("metadata", {}).get("original_category")
+                        or doc.get("metadata", {}).get("category", "unknown")
+                    ),
+                    "priority": doc.get("metadata", {}).get("priority", "medium")
+                })
 
         return formatted_results
 

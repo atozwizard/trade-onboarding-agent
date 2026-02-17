@@ -11,6 +11,8 @@ class Settings(BaseSettings):
 
     # Upstage API
     upstage_api_key: str = ""
+    embedding_provider: str = "local"  # local | upstage | auto
+    local_embedding_dim: int = 4096
 
     # LangSmith
     langsmith_api_key: str = ""
@@ -41,6 +43,8 @@ class Settings(BaseSettings):
     vector_db_dir: str = "backend/vectorstore"
     collection_name: str = "trade_coaching_knowledge"
     auto_ingest_on_startup: bool = True  # 서버 시작 시 자동 임베딩 여부
+    reingest_on_dataset_change: bool = True  # 데이터셋 변경 시 재인덱싱
+    force_reingest_on_startup: bool = False  # 서버 시작 시 강제 재인덱싱
 
 @lru_cache()
 def get_settings() -> Settings:

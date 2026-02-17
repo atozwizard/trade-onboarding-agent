@@ -12,10 +12,30 @@ Tools exposed for email coaching workflow:
 """
 
 import re
+import json
 from typing import List, Dict, Any, Optional
 from langchain.tools import tool
 from backend.rag.retriever import search as rag_search
+from backend.rag.retriever import search_with_filter
 from backend.config import get_settings
+
+
+def _dedupe_and_rank(results: List[Dict[str, Any]], k: int) -> List[Dict[str, Any]]:
+    seen = set()
+    deduped: List[Dict[str, Any]] = []
+
+    for doc in sorted(results, key=lambda item: float(item.get("distance", 10.0))):
+        key = (
+            str(doc.get("document", "")).strip(),
+            json.dumps(doc.get("metadata", {}), ensure_ascii=False, sort_keys=True),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(doc)
+        if len(deduped) >= k:
+            break
+    return deduped
 
 
 @tool
@@ -41,28 +61,40 @@ def search_email_references(
         >>> mistakes = search_email_references("FOB 오류", k=5, search_type="mistakes")
         >>> emails = search_email_references("클레임 응답", k=3, search_type="emails")
     """
-    settings = get_settings()
-
-    if not settings.upstage_api_key:
-        return []
+    get_settings()  # settings access kept for side effects / config validation
 
     try:
-        # Perform RAG search
-        results = rag_search(query=query, k=k)
+        results: List[Dict[str, Any]] = []
+        if search_type == "mistakes":
+            target_doc_types = ["common_mistake", "error_checklist"]
+        elif search_type == "emails":
+            target_doc_types = ["email", "process_flow"]
+        else:
+            target_doc_types = ["email", "common_mistake", "error_checklist", "process_flow"]
+
+        per_type_k = max(1, min(3, k))
+        for doc_type in target_doc_types:
+            results.extend(
+                search_with_filter(
+                    query=query,
+                    k=per_type_k,
+                    document_type=doc_type,
+                )
+            )
+
+        results = _dedupe_and_rank(results, k=max(k, 6))
 
         if not results:
-            return []
+            broad = rag_search(query=query, k=max(k, 8))
+            target_set = {doc_type.lower() for doc_type in target_doc_types}
+            filtered = [
+                doc
+                for doc in broad
+                if str(doc.get("metadata", {}).get("document_type", "")).lower() in target_set
+            ]
+            results = filtered if filtered else broad
 
-        # Filter by type if specified
-        if search_type != "all":
-            filtered_results = []
-            for doc in results:
-                doc_type = doc.get("metadata", {}).get("document_type", "")
-                if search_type == "mistakes" and "mistake" in doc_type.lower():
-                    filtered_results.append(doc)
-                elif search_type == "emails" and "email" in doc_type.lower():
-                    filtered_results.append(doc)
-            results = filtered_results if filtered_results else results
+        results = _dedupe_and_rank(results, k=k)
 
         # Format results
         formatted_results = []
