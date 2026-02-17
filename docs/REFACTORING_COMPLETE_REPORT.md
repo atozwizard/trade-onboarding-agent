@@ -47,7 +47,7 @@ trade-onboarding-agent 프로젝트의 아키텍처를 대폭 개선하여 **재
 **Git 커밋**: `a6264fc`
 
 **수행 작업**:
-1. `backend/agents/email/` → `docs/YYK/trash/legacy_email_agent/`로 이동 (10개 파일)
+1. `backend/agents/email/` → `docs/archive/yyk_legacy/legacy_email_agent/`로 이동 (10개 파일)
 2. `backend/dependencies.py` 정리 (EmailCoachAgent 관련 함수 주석 처리)
 3. 누락된 `backend/prompts/email_prompt.txt` 생성
 
@@ -271,7 +271,7 @@ RiskAgent inherits BaseAgent: True
 ✅ backend/dependencies.py                      (레거시 제거)
 ✅ backend/prompts/email_prompt.txt             (생성)
 ✅ docs/TOOLS_IMPLEMENTATION_REPORT.md          (613 lines)
-✅ docs/YYK/trash/legacy_email_agent/           (레거시 백업)
+✅ docs/archive/yyk_legacy/legacy_email_agent/           (레거시 백업)
 ```
 
 ### Git 커밋 히스토리

@@ -4,6 +4,7 @@ import os
 import sys
 import json
 import time
+import re
 from typing import Dict, Any, List, Optional, Type, cast
 
 import openai
@@ -157,15 +158,42 @@ def detect_intent_and_route_node(state: OrchestratorGraphState) -> Dict[str, Any
     state_dict = cast(Dict[str, Any], state)
 
     user_input = state_dict["user_input"]
+    context = state_dict.get("context") or {}
+    agents_instances = ORCHESTRATOR_COMPONENTS.agents_instances
+
+    # 1. Explicit mode from frontend context always overrides session stickiness.
+    if context.get("mode") and context["mode"] in agents_instances:
+        print(f"Orchestrator routing overridden by frontend context.mode to {context['mode']}")
+        state_dict["selected_agent_name"] = context["mode"]
+        return state_dict
+
+    # 2. 강력한 키워드 기반 우선 라우팅
+    risk_keywords = ["클레임", "선적 지연", "리스크", "손해배상", "대처 방안", "유사 사례", "패널티", "지연"]
+    if any(keyword in user_input for keyword in risk_keywords):
+        print(f"Orchestrator routed by Keyword Match to riskmanaging")
+        state_dict["selected_agent_name"] = "riskmanaging"
+        return state_dict
+
+    quiz_keywords = ["퀴즈", "문제", "학습", "테스트", "인코텀즈", "용어"]
+    if any(keyword in user_input for keyword in quiz_keywords):
+        print("Orchestrator routed by Keyword Match to quiz")
+        state_dict["selected_agent_name"] = "quiz"
+        return state_dict
+
+    email_keywords = ["이메일", "메일", "회신", "답장", "초안", "mail", "리뷰", "검토", "첨삭", "교정"]
+    if any(keyword in user_input for keyword in email_keywords):
+        print("Orchestrator routed by Keyword Match to email")
+        state_dict["selected_agent_name"] = "email"
+        return state_dict
+
     current_session_state = { # Reconstruct current_session_state for _detect_intent_and_route logic
         "active_agent": state_dict["active_agent"],
         "agent_specific_state": state_dict["agent_specific_state"],
         "conversation_history": state_dict["conversation_history"]
     }
-    context = state_dict["context"]
-    agents_instances = ORCHESTRATOR_COMPONENTS.agents_instances
 
-    # 1. Prioritize active agent in session state
+    # 3. Prioritize active agent in session state.
+    # Only riskmanaging stays sticky while multi-turn analysis is in progress.
     active_agent_name = current_session_state.get("active_agent")
     if active_agent_name and active_agent_name in agents_instances:
         agent_specific_state = current_session_state.get("agent_specific_state", {})
@@ -174,23 +202,90 @@ def detect_intent_and_route_node(state: OrchestratorGraphState) -> Dict[str, Any
                 print(f"Orchestrator continuing with active agent: {active_agent_name} (analysis in progress)")
                 state_dict["selected_agent_name"] = active_agent_name
                 return state_dict # Return updated state to flow to call_agent_node
+        elif active_agent_name in {"quiz", "email"}:
+            normalized_user_input = user_input.strip().lower()
+            clarification_keywords = [
+                "어떤정보",
+                "어떤 정보",
+                "무슨정보",
+                "무슨 정보",
+                "뭐가 필요",
+                "뭐가 필요한",
+                "필요한 정보",
+                "추가 정보",
+            ]
+            email_followup_keywords = [
+                "한국어",
+                "영어",
+                "번역",
+                "다시",
+                "수정",
+                "고쳐",
+                "톤",
+                "제목",
+                "간단",
+                "짧게",
+                "길게",
+                "공손",
+            ]
+            quiz_followup_keywords = [
+                "정답",
+                "해설",
+                "힌트",
+                "다음 문제",
+                "다음문제",
+                "한문제",
+                "난이도",
+                "쉽게",
+                "어렵게",
+            ]
+
+            if (
+                agent_specific_state.get("awaiting_follow_up")
+                and (
+                    any(keyword in user_input for keyword in clarification_keywords)
+                    or ("\n" in user_input and len(user_input.strip()) > 40)
+                )
+            ):
+                print(
+                    f"Orchestrator continuing with active agent: {active_agent_name} "
+                    "(awaiting follow-up details)"
+                )
+                state_dict["selected_agent_name"] = active_agent_name
+                return state_dict
+
+            # Keep short follow-up edits in the same active quiz/email flow.
+            # Example: "한국어로 만들어줄래?" right after email draft generation.
+            if (
+                active_agent_name == "email"
+                and len(normalized_user_input) <= 80
+                and any(keyword in user_input for keyword in email_followup_keywords)
+            ):
+                print(
+                    "Orchestrator continuing with active agent: email "
+                    "(short follow-up edit request)"
+                )
+                state_dict["selected_agent_name"] = active_agent_name
+                return state_dict
+            if (
+                active_agent_name == "quiz"
+                and len(normalized_user_input) <= 80
+                and (
+                    any(keyword in user_input for keyword in quiz_followup_keywords)
+                    or (
+                        state_dict.get("agent_specific_state", {}).get("pending_quiz")
+                        and re.fullmatch(r"\s*([1-4])\s*번?\s*", user_input)
+                    )
+                )
+            ):
+                print(
+                    "Orchestrator continuing with active agent: quiz "
+                    "(short follow-up quiz request)"
+                )
+                state_dict["selected_agent_name"] = active_agent_name
+                return state_dict
         else:
-            print(f"Orchestrator continuing with active agent: {active_agent_name}")
-            state_dict["selected_agent_name"] = active_agent_name
-            return state_dict # Return updated state
-
-    # 2. 강력한 키워드 기반 우선 라우팅
-    risk_keywords = ["클레임", "선적 지연", "리스크", "손해배상", "대처 방안", "유사 사례"]
-    if any(keyword in user_input for keyword in risk_keywords):
-        print(f"Orchestrator routed by Keyword Match to riskmanaging")
-        state_dict["selected_agent_name"] = "riskmanaging"
-        return state_dict
-
-    # 3. Explicit mode from frontend context
-    if context.get("mode") and context["mode"] in agents_instances:
-        print(f"Orchestrator routing overridden by frontend context.mode to {context['mode']}")
-        state_dict["selected_agent_name"] = context["mode"]
-        return state_dict
+            print(f"Orchestrator active agent is {active_agent_name}; re-evaluating intent.")
 
     # 4. LLM-based intent classification
     llm_predicted_agent_type = _classify_intent_with_llm(user_input)
@@ -217,7 +312,7 @@ def call_agent_node(state: OrchestratorGraphState) -> Dict[str, Any]:
     user_input = state_dict["user_input"]
     conversation_history = state_dict["conversation_history"]
     agent_specific_state = state_dict["agent_specific_state"]
-    context = state_dict["context"]
+    context = state_dict.get("context") or {}
     agents_instances = ORCHESTRATOR_COMPONENTS.agents_instances
 
     agent_instance = agents_instances.get(selected_agent_name)
@@ -235,11 +330,15 @@ def call_agent_node(state: OrchestratorGraphState) -> Dict[str, Any]:
         state_dict["agent_specific_state"] = {}
         return state_dict
     
+    agent_context = dict(context)
+    if selected_agent_name == "quiz":
+        agent_context["_agent_specific_state"] = agent_specific_state
+
     agent_output = agent_instance.run(
         user_input=user_input,
         conversation_history=conversation_history,
         analysis_in_progress=agent_specific_state.get("analysis_in_progress", False),
-        context=context
+        context=agent_context
     )
 
     state_dict["orchestrator_response"] = agent_output.get("response", {"response": "에이전트 응답 오류", "agent_type": "orchestrator", "metadata": {}})
@@ -247,6 +346,10 @@ def call_agent_node(state: OrchestratorGraphState) -> Dict[str, Any]:
     
     if "analysis_in_progress" in agent_output:
         state_dict["agent_specific_state"]["analysis_in_progress"] = agent_output["analysis_in_progress"]
+
+    agent_specific_update = agent_output.get("agent_specific_state")
+    if isinstance(agent_specific_update, dict):
+        state_dict["agent_specific_state"].update(agent_specific_update)
     
     if selected_agent_name == "riskmanaging" and not state_dict["agent_specific_state"].get("analysis_in_progress"):
          state_dict["active_agent"] = None
@@ -280,6 +383,11 @@ def normalize_response_node(state: OrchestratorGraphState) -> Dict[str, Any]:
     
     response_payload = state_dict["orchestrator_response"]
     final_response = normalize_response(response_payload)
-    
-    return final_response # This is the final output of the graph, to be returned by the API
 
+    # Update graph state with normalized payload so compiled graph output always
+    # contains ChatResponse-compatible fields.
+    state_dict["type"] = final_response["type"]
+    state_dict["message"] = final_response["message"]
+    state_dict["report"] = final_response["report"]
+    state_dict["meta"] = final_response.get("meta", {})
+    return state_dict

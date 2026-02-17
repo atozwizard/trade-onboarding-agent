@@ -197,7 +197,7 @@ dependencies = [
 - `TestConversationStoreFactory`: 1개 테스트
   - creates_inmemory_by_default
 
-#### `test_session_quick.py` (빠른 검증 스크립트)
+#### `scripts/quick/test_session_quick.py` (빠른 검증 스크립트)
 
 **검증 항목**:
 - InMemoryConversationStore CRUD 동작
@@ -243,7 +243,7 @@ dependencies = [
 ### 1. InMemory 동작 확인
 
 ```bash
-$ uv run python test_session_quick.py
+$ uv run python scripts/quick/test_session_quick.py
 ✅ All tests passed!
 ```
 
@@ -277,7 +277,7 @@ Installed 1 package in 1ms
 |------|------|-------|------|
 | `backend/agents/orchestrator/session_store.py` | 신규 | 244 | 세션 스토어 구현 |
 | `tests/test_session_store.py` | 신규 | 200 | 단위 테스트 |
-| `test_session_quick.py` | 신규 | 50 | 빠른 검증 스크립트 |
+| `scripts/quick/test_session_quick.py` | 신규 | 50 | 빠른 검증 스크립트 |
 | `docs/SESSION_STORE_GUIDE.md` | 신규 | 500 | 사용 가이드 |
 | `backend/agents/orchestrator/nodes.py` | 수정 | -28, +3 | InMemory 제거, factory 사용 |
 | `backend/config.py` | 수정 | +9 | Redis 설정 추가 |

@@ -15,6 +15,7 @@ from backend.schemas.quiz import (
 from backend.agents.orchestrator.graph import orchestrator_graph # Import the orchestrator graph
 from backend.agents.orchestrator.state import OrchestratorGraphState # Import the state definition
 from backend.services.quiz_service import quiz_session_store, quiz_generator
+from backend.core.response_converter import normalize_response
 
 router = APIRouter()
 
@@ -51,7 +52,21 @@ async def chat(request: ChatRequest):
     orchestrator_result = await compiled_orchestrator_app.ainvoke(initial_state)
     
     # The orchestrator_result is the final output of the graph (normalize_response_node)
-    return ChatResponse(**orchestrator_result)
+    if (
+        isinstance(orchestrator_result, dict)
+        and "type" in orchestrator_result
+        and "message" in orchestrator_result
+    ):
+        return ChatResponse(**orchestrator_result)
+
+    # Backward-safe fallback: normalize from orchestrator_response when graph
+    # returns full state dict without final response fields.
+    normalized = normalize_response(
+        orchestrator_result.get("orchestrator_response", orchestrator_result)
+        if isinstance(orchestrator_result, dict)
+        else orchestrator_result
+    )
+    return ChatResponse(**normalized)
 
 
 @router.post("/quiz/start", response_model=QuizStartResponse)

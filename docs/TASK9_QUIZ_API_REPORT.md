@@ -294,7 +294,7 @@ async def answer_quiz(request: QuizAnswerRequest):
 7. `test_answer_quiz_invalid_question`: 잘못된 문제 ID
 8. `test_full_quiz_workflow`: 전체 워크플로우 (시작 → 답안 제출 → 검증)
 
-#### `test_quiz_api_quick.py` (빠른 검증 스크립트)
+#### `scripts/quick/test_quiz_api_quick.py` (빠른 검증 스크립트)
 
 **검증 항목**:
 1. 샘플 퀴즈 생성 (3개)
@@ -427,7 +427,7 @@ async def answer_quiz(request: QuizAnswerRequest):
 | `backend/services/quiz_service.py` | 신규 | 281 | 퀴즈 서비스 + 세션 스토어 |
 | `backend/api/routes.py` | 수정 | +80 | Quiz API 엔드포인트 |
 | `tests/test_quiz_api.py` | 신규 | 230 | 단위 테스트 (8개) |
-| `test_quiz_api_quick.py` | 신규 | 90 | 빠른 검증 스크립트 |
+| `scripts/quick/test_quiz_api_quick.py` | 신규 | 90 | 빠른 검증 스크립트 |
 
 **총 추가 줄 수**: ~754줄
 
@@ -611,7 +611,7 @@ async def get_quiz_stats(quiz_session_id: str):
 ### 1. 서비스 레이어 테스트
 
 ```bash
-$ uv run python test_quiz_api_quick.py
+$ uv run python scripts/quick/test_quiz_api_quick.py
 ✅ All Quiz Service tests passed!
 ```
 
@@ -636,7 +636,7 @@ $ uv run python -c "from backend.api.routes import router; print([r.path for r i
 - `backend/schemas/quiz.py` - API 스키마
 - `backend/services/quiz_service.py` - 퀴즈 서비스
 - `tests/test_quiz_api.py` - 단위 테스트
-- `test_quiz_api_quick.py` - 빠른 검증
+- `scripts/quick/test_quiz_api_quick.py` - 빠른 검증
 
 ### 수정된 파일
 - `backend/api/routes.py` - Quiz API 엔드포인트

@@ -366,7 +366,7 @@ redis-cli TTL "session:123e4567-e89b-12d3-a456-426614174000"
 
 ```bash
 # 빠른 검증 테스트
-uv run python test_session_quick.py
+uv run python scripts/quick/test_session_quick.py
 
 # Pytest 전체 테스트 (Redis 실행 중이어야 함)
 uv run pytest tests/test_session_store.py -v
@@ -561,7 +561,7 @@ store = create_conversation_store()
 | `backend/agents/orchestrator/nodes.py` | 오케스트레이터 노드 (스토어 사용) |
 | `backend/config.py` | Redis 설정 |
 | `tests/test_session_store.py` | 단위 테스트 |
-| `test_session_quick.py` | 빠른 검증 테스트 |
+| `scripts/quick/test_session_quick.py` | 빠른 검증 테스트 |
 
 ### 외부 문서
 

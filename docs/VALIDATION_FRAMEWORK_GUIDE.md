@@ -492,7 +492,7 @@ uv run pytest tests/test_validation_framework.py::TestContentValidator -v
 
 ```bash
 # 수동 테스트 스크립트
-uv run python test_validation_quick.py
+uv run python scripts/quick/test_validation_quick.py
 ```
 
 **실행 결과 예시**:
@@ -704,7 +704,7 @@ class MyValidator(BaseValidator):
 - `backend/validation/pipeline.py` - ValidationPipeline
 - `backend/validation/examples.py` - 사용 예시
 - `tests/test_validation_framework.py` - 단위 테스트
-- `test_validation_quick.py` - 빠른 검증 스크립트
+- `scripts/quick/test_validation_quick.py` - 빠른 검증 스크립트
 
 ### 외부 참조
 - [Pydantic Documentation](https://docs.pydantic.dev/)

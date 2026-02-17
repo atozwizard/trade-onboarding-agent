@@ -558,7 +558,7 @@ backend/agents/
 ### 코드베이스
 - `backend/agents/eval_agent.py` - EvalTool 구현 (참고용)
 - `backend/rag/retriever.py` - RAG 검색 인터페이스
-- `docs/YYK/trash/legacy_email_agent/` - 레거시 검증 로직 (참고용)
+- `docs/archive/yyk_legacy/legacy_email_agent/` - 레거시 검증 로직 (참고용)
 
 ---
 

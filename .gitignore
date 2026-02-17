@@ -58,6 +58,7 @@ wheels/
 .coverage
 htmlcov/
 .tox/
+.ruff_cache/
 
 # Database
 *.db

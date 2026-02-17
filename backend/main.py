@@ -7,6 +7,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 """
 FastAPI main application
 """
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.config import get_settings
@@ -30,28 +31,7 @@ if settings.langsmith_tracing and settings.langsmith_api_key:
     os.environ["LANGSMITH_TRACING"] = "true"
     os.environ["LANGSMITH_PROJECT"] = settings.langsmith_project
 
-app = FastAPI(
-    title="Trade Onboarding AI Coach",
-    description="물류·무역 온보딩 AI 코치 API",
-    version="1.0.0",
-    debug=settings.debug
-)
-
-# CORS 설정
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# 라우터 등록
-app.include_router(routes.router, prefix="/api")
-
-
-@app.on_event("startup")
-async def startup_event():
+async def run_startup_tasks() -> None:
     """
     서버 시작 시 벡터 DB 초기화 및 데이터 임베딩
     - ChromaDB 컬렉션 확인
@@ -59,6 +39,10 @@ async def startup_event():
     - 이미 데이터가 있으면 스킵
     - config.auto_ingest_on_startup 설정으로 자동 임베딩 비활성화 가능
     """
+    if settings.environment.lower() in {"test", "testing"}:
+        logger.info("🧪 테스트 환경: startup 벡터 초기화를 건너뜁니다.")
+        return
+
     logger.info("🚀 무역 온보딩 AI 코치 API 시작 중...")
     logger.info("📊 벡터 데이터베이스 확인 중...")
 
@@ -93,6 +77,33 @@ async def startup_event():
         logger.error("💡 재시도: uv run python backend/rag/ingest.py --reset")
 
     logger.info("🎉 서버 시작 완료!")
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    await run_startup_tasks()
+    yield
+
+
+app = FastAPI(
+    title="Trade Onboarding AI Coach",
+    description="물류·무역 온보딩 AI 코치 API",
+    version="1.0.0",
+    debug=settings.debug,
+    lifespan=lifespan,
+)
+
+# CORS 설정
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 라우터 등록
+app.include_router(routes.router, prefix="/api")
 
 
 @app.get("/")

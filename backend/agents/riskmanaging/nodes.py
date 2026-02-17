@@ -23,7 +23,7 @@ sys.path.append(project_root)
 # Local imports (minimal as most will be internal)
 from backend.config import get_settings
 # RAG functionality now provided by tools.py
-# from backend.rag.embedder import get_embedding
+from backend.rag.embedder import get_embedding
 from pydantic import BaseModel, Field
 
 # Import RiskManagingGraphState explicitly and minimally
@@ -504,10 +504,12 @@ class RAGConnector:
         # Use tool: search_risk_cases
         from backend.agents.riskmanaging.tools import search_risk_cases
 
-        filtered_documents = search_risk_cases(
-            query=full_query,
-            k=k,
-            datasets=RAG_DATASETS
+        filtered_documents = search_risk_cases.invoke(
+            {
+                "query": full_query,
+                "k": k,
+                "datasets": RAG_DATASETS,
+            }
         )
 
         print(f"RAGConnector: Retrieved {len(filtered_documents)} risk-related documents using tools")
@@ -1028,6 +1030,7 @@ def format_final_output_node(state: RiskManagingGraphState) -> Dict[str, Any]:
     print("---format_final_output_node---")
     report = state.get("report_generated")
     error_message = state.get("error_message")
+    agent_response_from_state = state.get("agent_response")
 
     if error_message:
         final_response_content = f"죄송합니다. 처리 중 오류가 발생했습니다: {error_message}"
@@ -1035,21 +1038,25 @@ def format_final_output_node(state: RiskManagingGraphState) -> Dict[str, Any]:
     elif report:
         final_response_content = report.model_dump_json(indent=2, exclude_none=True)
         final_metadata = {"status": "success", "analysis_id": report.analysis_id}
+    elif agent_response_from_state:
+        # Use intermediate response (e.g. follow-up questions from conversation assessment)
+        final_response_content = str(agent_response_from_state)
+        final_metadata = {"status": "insufficient_info", "analysis_id": None}
     else:
-            # Fallback for when analysis is not complete but no specific error
-            final_response_content = "리스크 분석을 완료하지 못했습니다. 더 많은 정보가 필요하거나, 다시 시도해 주십시오."
-            final_metadata = {"status": "incomplete", "analysis_id": None}
+        # Fallback for when analysis is not complete but no specific error
+        final_response_content = "리스크 분석을 완료하지 못했습니다. 더 많은 정보가 필요하거나, 다시 시도해 주십시오."
+        final_metadata = {"status": "incomplete", "analysis_id": None}
 
     agent_response = RiskManagingAgentResponse(
-            response=final_response_content,
-            agent_type="riskmanaging",
-            metadata=final_metadata
-        )
+        response=final_response_content,
+        agent_type="riskmanaging",
+        metadata=final_metadata
+    )
 
     return {
-            "agent_response": agent_response,
-            "conversation_stage": "completed"
-        }
+        "agent_response": agent_response,
+        "conversation_stage": "completed"
+    }
 
 # Error handling node
 def handle_risk_error_node(state: RiskManagingGraphState, error: Exception) -> Dict[str, Any]:

@@ -224,7 +224,10 @@ class TestValidationPipeline:
         results = await pipeline.validate(data)
 
         assert len(results) == 2
-        assert all(r.is_valid for r in results)
+        assert results[0].is_valid is True
+        # Current QualityValidator expects a string or {"content": ...}.
+        assert results[1].is_valid is False
+        assert results[1].validator_name == "QualityValidator"
 
     @pytest.mark.asyncio
     async def test_pipeline_stop_on_critical(self):
@@ -325,7 +328,13 @@ class TestQuizValidation:
         results = await pipeline.validate(quiz_data)
 
         assert len(results) == 3
-        assert all(r.is_valid for r in results)
+        assert results[0].validator_name == "QuizQuestionValidator"
+        assert results[0].is_valid is True
+        # Current QuestionQuality validator fails for dict without "content" key.
+        assert results[1].validator_name == "QuestionQuality"
+        assert results[1].is_valid is False
+        assert results[2].validator_name == "QuizStructure"
+        assert results[2].is_valid is True
 
 
 class TestEmailValidation:

@@ -5,7 +5,8 @@ import sys
 import os
 
 # Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, PROJECT_ROOT)
 
 from backend.agents.orchestrator.session_store import (
     InMemoryConversationStore,

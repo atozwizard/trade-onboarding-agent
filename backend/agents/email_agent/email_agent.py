@@ -68,6 +68,11 @@ class EmailAgent(BaseAgent):
             "llm_parsed_response": None,
             "final_response_content": None,
             "llm_output_details": None,
+            "model_used": None,
+            "email_task_type": None,
+            "extracted_email_content": None,
+            "extracted_recipient_country": None,
+            "extracted_purpose": None,
             "final_metadata": None,
             "agent_output_for_orchestrator": None,
         }
@@ -93,15 +98,33 @@ class EmailAgent(BaseAgent):
                     "metadata": {"error": error_message}
                 },
                 "conversation_history": final_state.get("conversation_history", conversation_history),
-                "analysis_in_progress": final_state.get("analysis_in_progress", False)
+                "analysis_in_progress": final_state.get("analysis_in_progress", False),
+                "agent_specific_state": {"awaiting_follow_up": False},
             }
         
-        # Ensure the output structure matches what orchestrator expects
-        # { "response": response_payload,
-        #   "conversation_history": updated_agent_history,
-        #   "analysis_in_progress": updated_analysis_in_progress }
+        response_text = str(final_output.get("response", ""))
+        metadata = final_output.get("metadata", {}) if isinstance(final_output, dict) else {}
+        llm_details = metadata.get("llm_output_details", {}) if isinstance(metadata, dict) else {}
+        required_fields = []
+        if isinstance(llm_details, dict):
+            required_fields = llm_details.get("required_fields") or []
+            nested_error = llm_details.get("error")
+            if isinstance(nested_error, dict):
+                required_fields = required_fields or nested_error.get("required_fields") or []
+
+        awaiting_follow_up = bool(required_fields) or (
+            "필요" in response_text and "정보" in response_text
+        )
+
+        updated_history = final_state.get("conversation_history", conversation_history)
+        if not isinstance(updated_history, list) or len(updated_history) <= len(conversation_history):
+            updated_history = list(conversation_history)
+            updated_history.append({"role": "User", "content": user_input})
+            updated_history.append({"role": "Agent", "content": response_text})
+
         return {
-            "response": final_output.get("response", {}),
-            "conversation_history": final_state.get("conversation_history", conversation_history),
-            "analysis_in_progress": final_state.get("analysis_in_progress", False)
+            "response": final_output,
+            "conversation_history": updated_history,
+            "analysis_in_progress": final_state.get("analysis_in_progress", False),
+            "agent_specific_state": {"awaiting_follow_up": awaiting_follow_up},
         }
