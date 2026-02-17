@@ -9,6 +9,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 from backend.rag.chroma_client import get_or_create_collection
 from backend.rag.embedder import get_embedding
 from backend.config import get_settings
+from backend.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 def search(query: str, k: int = 5) -> List[Dict[str, Any]]:
     """
@@ -26,7 +29,7 @@ def search(query: str, k: int = 5) -> List[Dict[str, Any]]:
     query_embedding = get_embedding(query)
 
     if query_embedding is None:
-        print("Error: Could not generate embedding for the query.")
+        logger.warning("Could not generate embedding for query in search()")
         return []
 
     results = collection.query(
@@ -79,7 +82,7 @@ def search_with_filter(
     query_embedding = get_embedding(query)
 
     if query_embedding is None:
-        print("Error: Could not generate embedding for the query.")
+        logger.warning("Could not generate embedding for query in search_with_filter()")
         return []
 
     # where_clause = {}
@@ -136,7 +139,7 @@ def search_with_filter(
         
 
 
-    print(f"Executing search with filter: {where_clause if where_clause else 'None'}")
+    logger.debug("Executing search_with_filter where=%s", where_clause if where_clause else "None")
 
     results = collection.query(
         query_embeddings=[query_embedding],

@@ -1,79 +1,62 @@
 """
-Intent Classifier 테스트
+IntentClassifier tests (offline, deterministic).
 """
+from __future__ import annotations
+
 import pytest
+
 from backend.agents.intent_classifier import IntentClassifier
-from backend.infrastructure.upstage_llm import UpstageLLMGateway
-from backend.config import get_settings
 
 
-@pytest.fixture
-def classifier():
-    """IntentClassifier 픽스처"""
-    settings = get_settings()
-    llm = UpstageLLMGateway(api_key=settings.upstage_api_key)
-    return IntentClassifier(llm)
+class StubLLM:
+    def __init__(self, response: str = "분류: general_chat", should_raise: bool = False):
+        self.response = response
+        self.should_raise = should_raise
+        self.last_prompt = ""
+
+    def invoke(self, prompt: str, temperature=None) -> str:
+        self.last_prompt = prompt
+        if self.should_raise:
+            raise RuntimeError("forced llm failure")
+        return self.response
 
 
-class TestEmailCoachIntent:
-    """Email Coach 의도 테스트"""
-
-    def test_email_review_korean(self, classifier):
-        result = classifier.classify("이메일 검토해줘", {})
-        assert result == "email_coach"
-
-    def test_email_draft_korean(self, classifier):
-        result = classifier.classify("메일 초안 작성", {})
-        assert result == "email_coach"
-
-    def test_email_review_english(self, classifier):
-        result = classifier.classify("review my email", {})
-        assert result == "email_coach"
-
-
-class TestQuizIntent:
-    """Quiz 의도 테스트"""
-
-    def test_quiz_request_korean(self, classifier):
-        result = classifier.classify("퀴즈 내줘", {})
-        assert result == "quiz"
-
-    def test_quiz_problem_korean(self, classifier):
-        result = classifier.classify("문제 풀어볼래", {})
-        assert result == "quiz"
+@pytest.mark.parametrize(
+    ("llm_response", "expected"),
+    [
+        ("분류: email_coach", "email_coach"),
+        ("분류: quiz", "quiz"),
+        ("분류: risk_detect", "risk_detect"),
+        ("분류: out_of_scope", "out_of_scope"),
+        ("분류: general_chat", "general_chat"),
+    ],
+)
+def test_classify_parses_expected_intent(llm_response, expected):
+    classifier = IntentClassifier(StubLLM(response=llm_response))
+    result = classifier.classify("아무 입력", {})
+    assert result == expected
 
 
-class TestRiskDetectIntent:
-    """Risk Detection 의도 테스트"""
+def test_classify_uses_prompt_with_user_input():
+    llm = StubLLM(response="분류: quiz")
+    classifier = IntentClassifier(llm)
 
-    def test_mistake_request_korean(self, classifier):
-        result = classifier.classify("실수할 만한 부분 알려줘", {})
-        assert result == "risk_detect"
+    user_input = "퀴즈 내줘"
+    classifier.classify(user_input, {})
 
-    def test_caution_request_korean(self, classifier):
-        result = classifier.classify("주의할 점은?", {})
-        assert result == "risk_detect"
+    assert user_input in llm.last_prompt
 
 
-class TestGeneralChatIntent:
-    """General Chat 의도 테스트"""
+def test_parse_intent_keyword_fallback():
+    classifier = IntentClassifier(StubLLM(response="unknown format"))
 
-    def test_trade_term_question(self, classifier):
-        result = classifier.classify("FOB가 뭐야?", {})
-        assert result == "general_chat"
-
-    def test_incoterms_question(self, classifier):
-        result = classifier.classify("인코텀즈 종류 알려줘", {})
-        assert result == "general_chat"
+    assert classifier._parse_intent("I think this is email_coach") == "email_coach"
+    assert classifier._parse_intent("maybe quiz") == "quiz"
+    assert classifier._parse_intent("risk_detect requested") == "risk_detect"
+    assert classifier._parse_intent("out_of_scope question") == "out_of_scope"
 
 
-class TestOutOfScopeIntent:
-    """Out of Scope 의도 테스트"""
-
-    def test_weather_question(self, classifier):
-        result = classifier.classify("날씨 어때?", {})
-        assert result == "out_of_scope"
-
-    def test_food_question(self, classifier):
-        result = classifier.classify("점심 뭐 먹지?", {})
-        assert result == "out_of_scope"
+def test_classify_falls_back_to_general_chat_on_llm_error():
+    classifier = IntentClassifier(StubLLM(should_raise=True))
+    result = classifier.classify("이메일 검토해줘", {})
+    assert result == "general_chat"

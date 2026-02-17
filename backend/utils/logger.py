@@ -127,6 +127,11 @@ def setup_logging(
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("openai").setLevel(logging.WARNING)
+    logging.getLogger("openai._base_client").setLevel(logging.WARNING)
+    logging.getLogger("langsmith").setLevel(logging.WARNING)
+    logging.getLogger("posthog").setLevel(logging.WARNING)
     logging.getLogger("chromadb").setLevel(logging.WARNING)
 
     # 초기화 완료 로그

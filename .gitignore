@@ -1,4 +1,4 @@
-# Python
+# Python bytecode / extension modules
 __pycache__/
 *.py[cod]
 *$py.class
@@ -6,31 +6,37 @@ __pycache__/
 *.pyd
 .Python
 
-# Virtual Environments
+# Virtual environments
+.venv/
 venv/
 env/
 ENV/
-.venv/
 .virtualenv/
 
-# Environment Variables
+# Environment variables
 .env
 .env.local
 .env.*.local
 
-# uv (Python Package Manager)
+# Tool caches
 .uv_cache/
 .uv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+.cache/
 
-# IDE
+# IDE / editor
 .vscode/
 .idea/
 *.swp
 *.swo
 *.sublime-project
 *.sublime-workspace
+*~
 
-# OS
+# OS-generated files
 .DS_Store
 .DS_Store?
 ._*
@@ -41,10 +47,10 @@ Thumbs.db
 Desktop.ini
 
 # Logs
-*.log
 logs/
+*.log
 
-# Distribution / Packaging
+# Build / packaging
 dist/
 build/
 *.egg-info/
@@ -53,35 +59,32 @@ build/
 wheels/
 *.whl
 
-# Testing
-.pytest_cache/
+# Testing / coverage reports
 .coverage
+.coverage.*
 htmlcov/
-.tox/
 
-# Database
+# Local DB / vector stores (generated at runtime)
 *.db
 *.sqlite
 *.sqlite3
-
-# Dataset Embeddings (generated)
-dataset/embeddings/
-
-# ChromaDB
 chroma_data/
 *.chroma
+backend/rag/chroma_db/
 backend/vectorstore/*
+!backend/vectorstore/__init__.py
 
-# Jupyter Notebook
+# Generated embeddings
+dataset/embeddings/
+
+# Notebooks
 .ipynb_checkpoints/
 *.ipynb
 
-# Claude Code
+# Local assistant workspace
 .claude/
 
 # Temporary files
 *.tmp
 *.bak
 *.backup.py
-*.swp
-*~

@@ -2,6 +2,7 @@ import chromadb
 import os
 import shutil
 from chromadb.utils import embedding_functions
+from backend.utils.logger import get_logger
 
 # Configuration
 VECTOR_DB_DIR = "backend/vectorstore"
@@ -12,15 +13,20 @@ os.makedirs(VECTOR_DB_DIR, exist_ok=True)
 
 # Initialize Chroma client
 _client = chromadb.PersistentClient(path=VECTOR_DB_DIR)
+logger = get_logger(__name__)
 
 
 def get_or_create_collection():
     """
     Retrieves an existing Chroma collection or creates a new one if it doesn't exist.
     """
-    print(f"Attempting to get or create collection: {COLLECTION_NAME} in {VECTOR_DB_DIR}")
+    logger.debug(
+        "Attempting to get or create collection: %s in %s",
+        COLLECTION_NAME,
+        VECTOR_DB_DIR,
+    )
     collection = _client.get_or_create_collection(name=COLLECTION_NAME)
-    print(f"Successfully got or created collection: {COLLECTION_NAME}")
+    logger.debug("Successfully got or created collection: %s", COLLECTION_NAME)
     return collection
 
 
@@ -29,17 +35,17 @@ def reset_collection():
     Deletes the existing Chroma collection and recreates it.
     This effectively clears the vector database for a fresh ingestion.
     """
-    print(f"Resetting collection: {COLLECTION_NAME} in {VECTOR_DB_DIR}")
+    logger.info("Resetting collection: %s in %s", COLLECTION_NAME, VECTOR_DB_DIR)
     try:
         # Attempt to delete the collection if it exists
         _client.delete_collection(name=COLLECTION_NAME)
-        print(f"Collection '{COLLECTION_NAME}' deleted successfully.")
+        logger.info("Collection '%s' deleted successfully.", COLLECTION_NAME)
     except Exception as e:
-        print(f"Collection '{COLLECTION_NAME}' did not exist or could not be deleted: {e}")
+        logger.warning("Collection '%s' delete skipped: %s", COLLECTION_NAME, e)
     
     # Recreate the collection
     collection = _client.create_collection(name=COLLECTION_NAME)
-    print(f"Collection '{COLLECTION_NAME}' recreated successfully.")
+    logger.info("Collection '%s' recreated successfully.", COLLECTION_NAME)
     return collection
 
 if __name__ == '__main__':

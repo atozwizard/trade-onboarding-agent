@@ -26,6 +26,11 @@ class EmailGraphState(TypedDict):
     llm_parsed_response: Optional[Dict[str, Any]]
     final_response_content: Optional[str] # The user-facing message
     llm_output_details: Optional[Dict[str, Any]]
+    model_used: Optional[str]
+    email_task_type: Optional[str]
+    extracted_email_content: Optional[str]
+    extracted_recipient_country: Optional[str]
+    extracted_purpose: Optional[str]
     final_metadata: Optional[Dict[str, Any]] # The metadata to be returned
 
     # Output for Orchestrator

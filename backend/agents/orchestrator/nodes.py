@@ -3,8 +3,8 @@
 import os
 import sys
 import json
-import uuid
 import time
+import re
 from typing import Dict, Any, List, Optional, Type, cast
 
 import openai
@@ -14,32 +14,16 @@ from langsmith import traceable # traceable will be applied at graph level or in
 # External imports
 from backend.config import get_settings
 from backend.core.response_converter import normalize_response
+from backend.utils.logger import get_logger
 
 # Internal imports for Orchestrator package
 from .state import OrchestratorGraphState
+from .session_store import create_conversation_store
 
 from backend.agents.default_chat.default_chat_agent import DefaultChatAgent # Actual DefaultChatAgent import
 from backend.agents.riskmanaging.graph import RiskManagingAgent # Actual RiskManagingAgent import
 from backend.agents.quiz_agent.quiz_agent import QuizAgent                   # Actual QuizAgent import
 from backend.agents.email_agent.email_agent import EmailAgent               # Actual EmailAgent import
-
-
-# --- In-Memory Conversation Store (from old orchestrator.py) ---
-class InMemoryConversationStore:
-    _store: Dict[str, Dict[str, Any]] = {}
-
-    def get_state(self, session_id: str) -> Optional[Dict[str, Any]]:
-        return self._store.get(session_id)
-
-    def save_state(self, session_id: str, state: Dict[str, Any]):
-        self._store[session_id] = state
-
-    def delete_state(self, session_id: str):
-        if session_id in self._store:
-            del self._store[session_id]
-
-    def create_new_session_id(self) -> str:
-        return str(uuid.uuid4())
 
 
 # --- Prompt Loader Function (from old orchestrator.py) ---
@@ -66,6 +50,7 @@ AGENT_CLASS_MAPPING: Dict[str, Type[Any]] = {
 }
 
 DEFAULT_AGENT_NAME = "default_chat"
+logger = get_logger(__name__)
 
 # --- Global Components ---
 # These components are initialized once and used across nodes.
@@ -73,7 +58,7 @@ DEFAULT_AGENT_NAME = "default_chat"
 class OrchestratorComponents:
     def __init__(self):
         self.settings = get_settings()
-        self.conversation_store = InMemoryConversationStore()
+        self.conversation_store = create_conversation_store()  # Factory function chooses InMemory or Redis
         
         self.llm = None
         if self.settings.upstage_api_key:
@@ -82,7 +67,9 @@ class OrchestratorComponents:
                 api_key=self.settings.upstage_api_key
             )
         else:
-            print("Warning: UPSTAGE_API_KEY is not set. LLM calls for Orchestrator intent classification will fail.")
+            logger.warning(
+                "UPSTAGE_API_KEY is not set; orchestrator LLM intent classification will fallback."
+            )
         
         self.orchestrator_intent_prompt = _load_prompt("orchestrator_intent_prompt.txt")
 
@@ -97,7 +84,7 @@ class OrchestratorComponents:
         self.agents_instances: Dict[str, Any] = {}
         for agent_name, agent_class in AGENT_CLASS_MAPPING.items():
             self.agents_instances[agent_name] = agent_class()
-            print(f"Orchestrator initialized agent: {agent_name}")
+            logger.info("Orchestrator initialized agent: %s", agent_name)
 
 ORCHESTRATOR_COMPONENTS = OrchestratorComponents()
 
@@ -119,9 +106,13 @@ def load_session_state_node(state: OrchestratorGraphState) -> Dict[str, Any]:
             "agent_specific_state": {},
             "last_interaction_timestamp": time.time(),
         }
-        print(f"Initialized new session: {session_id}")
+        logger.debug("Initialized new session: %s", session_id)
     else:
-        print(f"Loaded existing session: {session_id}, active_agent: {session_data.get('active_agent')}")
+        logger.debug(
+            "Loaded existing session: %s, active_agent=%s",
+            session_id,
+            session_data.get("active_agent"),
+        )
     
     # Update state with loaded session data
     state_dict["conversation_history"] = session_data["conversation_history"]
@@ -137,7 +128,7 @@ def _classify_intent_with_llm(user_input: str) -> str:
     orchestrator_intent_prompt = ORCHESTRATOR_COMPONENTS.orchestrator_intent_prompt
 
     if not llm:
-        print("LLM client not initialized. Falling back to default.")
+        logger.debug("LLM client not initialized. Falling back to default.")
         return DEFAULT_AGENT_NAME
     
     try:
@@ -149,7 +140,11 @@ def _classify_intent_with_llm(user_input: str) -> str:
             {"role": "user", "content": user_message_content}
         ]
         
-        print(f"DEBUG: LLM Intent Classification Messages: {json.dumps(messages, ensure_ascii=False, indent=2)}")
+        logger.debug(
+            "LLM intent classification request prepared (messages=%s, user_input_len=%s)",
+            len(messages),
+            len(user_input),
+        )
 
         response = llm.chat.completions.create(
             model="solar-pro2",
@@ -158,16 +153,19 @@ def _classify_intent_with_llm(user_input: str) -> str:
             response_format={"type": "json_object"}
         ).choices[0].message.content
         
-        print(f"DEBUG: LLM Raw Intent Classification Response: {response}")
+        logger.debug(
+            "LLM intent classification raw response (truncated): %s",
+            str(response)[:400],
+        )
         
         parsed_response = json.loads(response)
         agent_type = parsed_response.get("agent_type", DEFAULT_AGENT_NAME)
         reason = parsed_response.get("reason", "LLM based classification.")
-        print(f"LLM classified intent: {agent_type} (Reason: {reason})")
+        logger.info("LLM classified intent: %s (reason=%s)", agent_type, reason)
         return agent_type
 
     except Exception as e:
-        print(f"Error during LLM intent classification: {e}. Falling back to default.")
+        logger.warning("Intent classification failed (%s). Falling back to default.", e)
         return DEFAULT_AGENT_NAME
 
 
@@ -175,55 +173,149 @@ def detect_intent_and_route_node(state: OrchestratorGraphState) -> Dict[str, Any
     state_dict = cast(Dict[str, Any], state)
 
     user_input = state_dict["user_input"]
+    context = state_dict.get("context") or {}
+    agents_instances = ORCHESTRATOR_COMPONENTS.agents_instances
+
+    # 1. Explicit mode from frontend context always overrides session stickiness.
+    if context.get("mode") and context["mode"] in agents_instances:
+        logger.debug("Routing overridden by context.mode=%s", context["mode"])
+        state_dict["selected_agent_name"] = context["mode"]
+        return state_dict
+
+    # 2. 강력한 키워드 기반 우선 라우팅
+    risk_keywords = ["클레임", "선적 지연", "리스크", "손해배상", "대처 방안", "유사 사례", "패널티", "지연"]
+    if any(keyword in user_input for keyword in risk_keywords):
+        logger.debug("Keyword routing to riskmanaging")
+        state_dict["selected_agent_name"] = "riskmanaging"
+        return state_dict
+
+    quiz_keywords = ["퀴즈", "문제", "학습", "테스트", "인코텀즈", "용어"]
+    if any(keyword in user_input for keyword in quiz_keywords):
+        logger.debug("Keyword routing to quiz")
+        state_dict["selected_agent_name"] = "quiz"
+        return state_dict
+
+    email_keywords = ["이메일", "메일", "회신", "답장", "초안", "mail", "리뷰", "검토", "첨삭", "교정"]
+    if any(keyword in user_input for keyword in email_keywords):
+        logger.debug("Keyword routing to email")
+        state_dict["selected_agent_name"] = "email"
+        return state_dict
+
     current_session_state = { # Reconstruct current_session_state for _detect_intent_and_route logic
         "active_agent": state_dict["active_agent"],
         "agent_specific_state": state_dict["agent_specific_state"],
         "conversation_history": state_dict["conversation_history"]
     }
-    context = state_dict["context"]
-    agents_instances = ORCHESTRATOR_COMPONENTS.agents_instances
 
-    # 1. Prioritize active agent in session state
+    # 3. Prioritize active agent in session state.
+    # Only riskmanaging stays sticky while multi-turn analysis is in progress.
     active_agent_name = current_session_state.get("active_agent")
     if active_agent_name and active_agent_name in agents_instances:
         agent_specific_state = current_session_state.get("agent_specific_state", {})
         if active_agent_name == "riskmanaging":
             if agent_specific_state.get("analysis_in_progress"):
-                print(f"Orchestrator continuing with active agent: {active_agent_name} (analysis in progress)")
+                logger.debug(
+                    "Continuing with active agent %s (analysis in progress)",
+                    active_agent_name,
+                )
                 state_dict["selected_agent_name"] = active_agent_name
                 return state_dict # Return updated state to flow to call_agent_node
+        elif active_agent_name in {"quiz", "email"}:
+            normalized_user_input = user_input.strip().lower()
+            clarification_keywords = [
+                "어떤정보",
+                "어떤 정보",
+                "무슨정보",
+                "무슨 정보",
+                "뭐가 필요",
+                "뭐가 필요한",
+                "필요한 정보",
+                "추가 정보",
+            ]
+            email_followup_keywords = [
+                "한국어",
+                "영어",
+                "번역",
+                "다시",
+                "수정",
+                "고쳐",
+                "톤",
+                "제목",
+                "간단",
+                "짧게",
+                "길게",
+                "공손",
+            ]
+            quiz_followup_keywords = [
+                "정답",
+                "해설",
+                "힌트",
+                "다음 문제",
+                "다음문제",
+                "한문제",
+                "난이도",
+                "쉽게",
+                "어렵게",
+            ]
+
+            if (
+                agent_specific_state.get("awaiting_follow_up")
+                and (
+                    any(keyword in user_input for keyword in clarification_keywords)
+                    or ("\n" in user_input and len(user_input.strip()) > 40)
+                )
+            ):
+                logger.debug(
+                    "Continuing with active agent %s (awaiting follow-up details)",
+                    active_agent_name,
+                )
+                state_dict["selected_agent_name"] = active_agent_name
+                return state_dict
+
+            # Keep short follow-up edits in the same active quiz/email flow.
+            # Example: "한국어로 만들어줄래?" right after email draft generation.
+            if (
+                active_agent_name == "email"
+                and len(normalized_user_input) <= 80
+                and any(keyword in user_input for keyword in email_followup_keywords)
+            ):
+                logger.debug("Continuing with active agent email (short follow-up edit request)")
+                state_dict["selected_agent_name"] = active_agent_name
+                return state_dict
+            if (
+                active_agent_name == "quiz"
+                and len(normalized_user_input) <= 80
+                and (
+                    any(keyword in user_input for keyword in quiz_followup_keywords)
+                    or (
+                        state_dict.get("agent_specific_state", {}).get("pending_quiz")
+                        and re.fullmatch(r"\s*([1-4])\s*번?\s*", user_input)
+                    )
+                )
+            ):
+                logger.debug("Continuing with active agent quiz (short follow-up quiz request)")
+                state_dict["selected_agent_name"] = active_agent_name
+                return state_dict
         else:
-            print(f"Orchestrator continuing with active agent: {active_agent_name}")
-            state_dict["selected_agent_name"] = active_agent_name
-            return state_dict # Return updated state
-
-    # 2. 강력한 키워드 기반 우선 라우팅
-    risk_keywords = ["클레임", "선적 지연", "리스크", "손해배상", "대처 방안", "유사 사례"]
-    if any(keyword in user_input for keyword in risk_keywords):
-        print(f"Orchestrator routed by Keyword Match to riskmanaging")
-        state_dict["selected_agent_name"] = "riskmanaging"
-        return state_dict
-
-    # 3. Explicit mode from frontend context
-    if context.get("mode") and context["mode"] in agents_instances:
-        print(f"Orchestrator routing overridden by frontend context.mode to {context['mode']}")
-        state_dict["selected_agent_name"] = context["mode"]
-        return state_dict
+            logger.debug("Active agent is %s; re-evaluating intent", active_agent_name)
 
     # 4. LLM-based intent classification
     llm_predicted_agent_type = _classify_intent_with_llm(user_input)
     state_dict["llm_intent_classification"] = {"predicted_type": llm_predicted_agent_type}
     
     if llm_predicted_agent_type == "out_of_scope":
-        print(f"LLM classified intent as 'out_of_scope'. Routing to {DEFAULT_AGENT_NAME}.")
+        logger.debug("LLM classified out_of_scope; routing to %s", DEFAULT_AGENT_NAME)
         state_dict["selected_agent_name"] = DEFAULT_AGENT_NAME
         return state_dict
     elif llm_predicted_agent_type in AGENT_CLASS_MAPPING:
-        print(f"Orchestrator routed by LLM intent classification to {llm_predicted_agent_type}")
+        logger.debug("LLM routing to %s", llm_predicted_agent_type)
         state_dict["selected_agent_name"] = llm_predicted_agent_type
         return state_dict
     else:
-        print(f"LLM predicted unknown agent type '{llm_predicted_agent_type}'. Falling back to default.")
+        logger.warning(
+            "LLM predicted unknown agent type '%s'. Falling back to default.",
+            llm_predicted_agent_type,
+        )
         state_dict["selected_agent_name"] = DEFAULT_AGENT_NAME
         return state_dict
 
@@ -235,7 +327,7 @@ def call_agent_node(state: OrchestratorGraphState) -> Dict[str, Any]:
     user_input = state_dict["user_input"]
     conversation_history = state_dict["conversation_history"]
     agent_specific_state = state_dict["agent_specific_state"]
-    context = state_dict["context"]
+    context = state_dict.get("context") or {}
     agents_instances = ORCHESTRATOR_COMPONENTS.agents_instances
 
     agent_instance = agents_instances.get(selected_agent_name)
@@ -253,11 +345,15 @@ def call_agent_node(state: OrchestratorGraphState) -> Dict[str, Any]:
         state_dict["agent_specific_state"] = {}
         return state_dict
     
+    agent_context = dict(context)
+    if selected_agent_name == "quiz":
+        agent_context["_agent_specific_state"] = agent_specific_state
+
     agent_output = agent_instance.run(
         user_input=user_input,
         conversation_history=conversation_history,
         analysis_in_progress=agent_specific_state.get("analysis_in_progress", False),
-        context=context
+        context=agent_context
     )
 
     state_dict["orchestrator_response"] = agent_output.get("response", {"response": "에이전트 응답 오류", "agent_type": "orchestrator", "metadata": {}})
@@ -265,10 +361,17 @@ def call_agent_node(state: OrchestratorGraphState) -> Dict[str, Any]:
     
     if "analysis_in_progress" in agent_output:
         state_dict["agent_specific_state"]["analysis_in_progress"] = agent_output["analysis_in_progress"]
+
+    agent_specific_update = agent_output.get("agent_specific_state")
+    if isinstance(agent_specific_update, dict):
+        state_dict["agent_specific_state"].update(agent_specific_update)
     
     if selected_agent_name == "riskmanaging" and not state_dict["agent_specific_state"].get("analysis_in_progress"):
          state_dict["active_agent"] = None
-         print(f"RiskManagingAgent completed analysis. Resetting active_agent for session {state_dict['session_id']}.")
+         logger.debug(
+             "RiskManagingAgent completed analysis. Resetting active_agent for session %s.",
+             state_dict["session_id"],
+         )
     else:
         state_dict["active_agent"] = selected_agent_name
 
@@ -298,6 +401,11 @@ def normalize_response_node(state: OrchestratorGraphState) -> Dict[str, Any]:
     
     response_payload = state_dict["orchestrator_response"]
     final_response = normalize_response(response_payload)
-    
-    return final_response # This is the final output of the graph, to be returned by the API
 
+    # Update graph state with normalized payload so compiled graph output always
+    # contains ChatResponse-compatible fields.
+    state_dict["type"] = final_response["type"]
+    state_dict["message"] = final_response["message"]
+    state_dict["report"] = final_response["report"]
+    state_dict["meta"] = final_response.get("meta", {})
+    return state_dict

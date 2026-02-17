@@ -1,83 +1,272 @@
 """
-Orchestrator 테스트
+Orchestrator node-level tests for current LangGraph architecture.
 """
+from __future__ import annotations
+
+from typing import Any, Dict, List
+
 import pytest
-from backend.agents.orchestrator import Orchestrator
-from backend.infrastructure.upstage_llm import UpstageLLMGateway
-from backend.infrastructure.chroma_retriever import ChromaDocumentRetriever
-from backend.config import get_settings
+
+from backend.agents.orchestrator import nodes as orchestrator_nodes
+from backend.agents.orchestrator.session_store import InMemoryConversationStore
 
 
-@pytest.fixture
-def orchestrator():
-    """Orchestrator 픽스처"""
-    settings = get_settings()
-    llm = UpstageLLMGateway(api_key=settings.upstage_api_key)
-    retriever = ChromaDocumentRetriever(settings=settings)
-    return Orchestrator(llm, retriever)
+def make_state(**overrides) -> Dict[str, Any]:
+    base: Dict[str, Any] = {
+        "session_id": "session-1",
+        "user_input": "안녕하세요",
+        "context": {},
+        "conversation_history": [],
+        "active_agent": None,
+        "agent_specific_state": {},
+        "orchestrator_response": None,
+        "llm_intent_classification": None,
+        "selected_agent_name": None,
+    }
+    base.update(overrides)
+    return base
 
 
-class TestEmailCoachRouting:
-    """Email Coach 라우팅 테스트"""
+class DummyAgent:
+    def __init__(self, name: str, analysis_in_progress: bool = False):
+        self.name = name
+        self.analysis_in_progress = analysis_in_progress
 
-    def test_email_review_routes_to_email_agent(self, orchestrator):
-        """이메일 검토 요청 → email_coach 라우팅"""
-        result = orchestrator.run("이메일 검토: We ship via FOB", {})
+    def run(
+        self,
+        user_input: str,
+        conversation_history: List[Dict[str, str]],
+        analysis_in_progress: bool,
+        context: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
+        updated_history = list(conversation_history)
+        updated_history.append({"role": "User", "content": user_input})
+        updated_history.append({"role": "Agent", "content": f"{self.name} handled"})
 
-        assert result.agent_type == "email_coach"
-        assert result.response is not None
-        # EmailAgent가 동작하므로 "리스크" 또는 "톤" 키워드 포함
-        assert "리스크" in result.response or "톤" in result.response or "무역" in result.response
-
-    def test_email_draft_routes_to_email_agent(self, orchestrator):
-        """이메일 초안 작성 요청 → email_coach 라우팅"""
-        result = orchestrator.run("바이어에게 견적 요청 이메일 작성해줘", {})
-
-        assert result.agent_type == "email_coach"
-        assert result.response is not None
-
-
-class TestQuizRouting:
-    """Quiz 라우팅 테스트"""
-
-    def test_quiz_request_routes_to_quiz_stub(self, orchestrator):
-        """퀴즈 요청 → quiz stub"""
-        result = orchestrator.run("퀴즈 내줘", {})
-
-        assert result.agent_type == "quiz"
-        assert "준비 중" in result.response or "not_implemented" in str(result.metadata)
+        return {
+            "response": {
+                "response": f"{self.name} handled",
+                "agent_type": self.name,
+                "metadata": {},
+            },
+            "conversation_history": updated_history,
+            "analysis_in_progress": self.analysis_in_progress,
+        }
 
 
-class TestRiskDetectRouting:
-    """Risk Detection 라우팅 테스트"""
-
-    def test_risk_detect_routes_to_stub(self, orchestrator):
-        """리스크 감지 요청 → risk_detect stub"""
-        result = orchestrator.run("실수할 만한 부분 알려줘", {})
-
-        assert result.agent_type == "risk_detect"
-        assert "준비 중" in result.response or "not_implemented" in str(result.metadata)
-
-
-class TestGeneralChatRouting:
-    """General Chat 라우팅 테스트"""
-
-    def test_general_question_routes_to_general_chat(self, orchestrator):
-        """일반 질문 → general_chat"""
-        result = orchestrator.run("FOB가 뭐야?", {})
-
-        assert result.agent_type == "general_chat"
-        assert result.response is not None
+@pytest.fixture(autouse=True)
+def reset_orchestrator_components(monkeypatch):
+    store = InMemoryConversationStore()
+    monkeypatch.setattr(orchestrator_nodes.ORCHESTRATOR_COMPONENTS, "conversation_store", store)
+    monkeypatch.setattr(
+        orchestrator_nodes.ORCHESTRATOR_COMPONENTS,
+        "agents_instances",
+        {
+            "quiz": DummyAgent("quiz"),
+            "email": DummyAgent("email"),
+            "riskmanaging": DummyAgent("riskmanaging", analysis_in_progress=False),
+            "default_chat": DummyAgent("default_chat"),
+        },
+    )
+    return store
 
 
-class TestErrorHandling:
-    """에러 핸들링 테스트"""
+def test_load_session_state_initializes_new_session(reset_orchestrator_components):
+    state = make_state(session_id="new-session")
+    updated = orchestrator_nodes.load_session_state_node(state)
 
-    def test_orchestrator_handles_llm_error_gracefully(self, orchestrator):
-        """LLM 에러 시 폴백 동작 확인"""
-        # 빈 입력
-        result = orchestrator.run("", {})
+    assert updated["conversation_history"] == []
+    assert updated["active_agent"] is None
+    assert updated["agent_specific_state"] == {}
 
-        # 에러가 발생해도 응답 반환
-        assert result.response is not None
-        assert result.agent_type in ["general_chat", "out_of_scope", "email_coach"]
+
+def test_detect_intent_routes_to_risk_by_keyword():
+    state = make_state(user_input="선적 지연 리스크를 분석해줘")
+    updated = orchestrator_nodes.detect_intent_and_route_node(state)
+
+    assert updated["selected_agent_name"] == "riskmanaging"
+
+
+def test_detect_intent_routes_to_quiz_by_keyword_even_with_active_agent():
+    state = make_state(
+        user_input="인코텀즈 퀴즈 내줘",
+        active_agent="email",
+    )
+    updated = orchestrator_nodes.detect_intent_and_route_node(state)
+
+    assert updated["selected_agent_name"] == "quiz"
+
+
+def test_detect_intent_routes_to_email_by_keyword():
+    state = make_state(user_input="고객사에 보낼 메일 초안 작성해줘")
+    updated = orchestrator_nodes.detect_intent_and_route_node(state)
+
+    assert updated["selected_agent_name"] == "email"
+
+
+def test_detect_intent_routes_to_email_by_review_keyword():
+    state = make_state(user_input="이거 리뷰해줘")
+    updated = orchestrator_nodes.detect_intent_and_route_node(state)
+
+    assert updated["selected_agent_name"] == "email"
+
+
+def test_detect_intent_keeps_active_email_for_followup_clarification():
+    state = make_state(
+        user_input="어떤정보가 필요한데",
+        active_agent="email",
+        agent_specific_state={"awaiting_follow_up": True},
+    )
+
+    updated = orchestrator_nodes.detect_intent_and_route_node(state)
+
+    assert updated["selected_agent_name"] == "email"
+
+
+def test_detect_intent_keeps_active_email_for_short_edit_request():
+    state = make_state(
+        user_input="한국어로 만들어줄래?",
+        active_agent="email",
+        agent_specific_state={"awaiting_follow_up": False},
+    )
+
+    updated = orchestrator_nodes.detect_intent_and_route_node(state)
+
+    assert updated["selected_agent_name"] == "email"
+
+
+def test_detect_intent_keeps_active_quiz_for_numeric_answer():
+    state = make_state(
+        user_input="4",
+        active_agent="quiz",
+        agent_specific_state={"pending_quiz": {"question": "q", "answer": 0}},
+    )
+
+    updated = orchestrator_nodes.detect_intent_and_route_node(state)
+
+    assert updated["selected_agent_name"] == "quiz"
+
+
+def test_detect_intent_respects_explicit_mode_context():
+    state = make_state(user_input="아무거나", context={"mode": "quiz"})
+    updated = orchestrator_nodes.detect_intent_and_route_node(state)
+
+    assert updated["selected_agent_name"] == "quiz"
+
+
+def test_detect_intent_mode_overrides_active_agent():
+    state = make_state(
+        user_input="리스크 분석 요청",
+        context={"mode": "quiz"},
+        active_agent="email",
+    )
+    updated = orchestrator_nodes.detect_intent_and_route_node(state)
+
+    assert updated["selected_agent_name"] == "quiz"
+
+
+def test_detect_intent_default_chat_is_not_sticky(monkeypatch):
+    monkeypatch.setattr(orchestrator_nodes, "_classify_intent_with_llm", lambda _: "quiz")
+    state = make_state(
+        user_input="다음 단계 알려줘",
+        active_agent="default_chat",
+    )
+
+    updated = orchestrator_nodes.detect_intent_and_route_node(state)
+
+    assert updated["selected_agent_name"] == "quiz"
+    assert updated["llm_intent_classification"]["predicted_type"] == "quiz"
+
+
+def test_detect_intent_uses_llm_when_no_fast_path(monkeypatch):
+    monkeypatch.setattr(orchestrator_nodes, "_classify_intent_with_llm", lambda _: "email")
+    state = make_state(user_input="오늘 뭐부터 하면 좋을까")
+
+    updated = orchestrator_nodes.detect_intent_and_route_node(state)
+
+    assert updated["selected_agent_name"] == "email"
+    assert updated["llm_intent_classification"]["predicted_type"] == "email"
+
+
+def test_call_agent_node_sets_active_agent_for_normal_agent():
+    state = make_state(
+        selected_agent_name="quiz",
+        user_input="퀴즈",
+        conversation_history=[],
+        agent_specific_state={},
+    )
+
+    updated = orchestrator_nodes.call_agent_node(state)
+
+    assert updated["active_agent"] == "quiz"
+    assert updated["orchestrator_response"]["agent_type"] == "quiz"
+    assert len(updated["conversation_history"]) == 2
+
+
+def test_call_agent_node_clears_active_agent_when_risk_analysis_complete(monkeypatch):
+    monkeypatch.setitem(
+        orchestrator_nodes.ORCHESTRATOR_COMPONENTS.agents_instances,
+        "riskmanaging",
+        DummyAgent("riskmanaging", analysis_in_progress=False),
+    )
+
+    state = make_state(
+        selected_agent_name="riskmanaging",
+        user_input="리스크 분석",
+        conversation_history=[],
+        agent_specific_state={"analysis_in_progress": True},
+    )
+
+    updated = orchestrator_nodes.call_agent_node(state)
+
+    assert updated["active_agent"] is None
+    assert updated["agent_specific_state"]["analysis_in_progress"] is False
+
+
+def test_call_agent_node_merges_agent_specific_state(monkeypatch):
+    class FollowUpAgent(DummyAgent):
+        def run(self, user_input, conversation_history, analysis_in_progress, context=None):
+            base = super().run(user_input, conversation_history, analysis_in_progress, context)
+            base["agent_specific_state"] = {"awaiting_follow_up": True}
+            return base
+
+    monkeypatch.setitem(
+        orchestrator_nodes.ORCHESTRATOR_COMPONENTS.agents_instances,
+        "email",
+        FollowUpAgent("email"),
+    )
+
+    state = make_state(
+        selected_agent_name="email",
+        user_input="리뷰해줘",
+        conversation_history=[],
+        agent_specific_state={},
+    )
+
+    updated = orchestrator_nodes.call_agent_node(state)
+
+    assert updated["agent_specific_state"]["awaiting_follow_up"] is True
+
+
+def test_finalize_and_normalize_roundtrip(reset_orchestrator_components):
+    state = make_state(
+        session_id="save-session",
+        selected_agent_name="default_chat",
+        active_agent="default_chat",
+        conversation_history=[{"role": "Agent", "content": "done"}],
+        agent_specific_state={"analysis_in_progress": False},
+        orchestrator_response={
+            "response": "완료",
+            "agent_type": "default_chat",
+            "metadata": {},
+        },
+    )
+
+    saved = orchestrator_nodes.finalize_and_save_state_node(state)
+    persisted = reset_orchestrator_components.get_state("save-session")
+    normalized = orchestrator_nodes.normalize_response_node(saved)
+
+    assert persisted is not None
+    assert persisted["active_agent"] == "default_chat"
+    assert normalized["type"] == "chat"
+    assert normalized["message"] == "완료"

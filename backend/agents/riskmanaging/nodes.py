@@ -22,6 +22,8 @@ sys.path.append(project_root)
 
 # Local imports (minimal as most will be internal)
 from backend.config import get_settings
+from backend.utils.logger import get_logger
+# RAG functionality now provided by tools.py
 from backend.rag.embedder import get_embedding
 from pydantic import BaseModel, Field
 
@@ -35,6 +37,7 @@ from backend.agents.riskmanaging.state import (
     RiskReport, RiskManagingAgentResponse, RiskScoring, LossSimulation,
     ControlGapAnalysis, PreventionStrategy, ReportRiskFactor # Added ReportRiskFactor
 )
+logger = get_logger(__name__)
 
 # --- Prompt Loader ---
 def _load_prompt(prompt_file_name: str) -> str:
@@ -45,14 +48,14 @@ def _load_prompt(prompt_file_name: str) -> str:
     prompt_path = os.path.join(project_root, 'backend', 'prompts', prompt_file_name)
     
     if not os.path.exists(prompt_path):
-        print(f"Warning: Prompt file not found: {prompt_path}. Using default.")
+        logger.warning("Prompt file not found: %s. Using default prompt.", prompt_path)
         return "당신은 '현실적인 선배/상사형 리스크 관리 에이전트'입니다."
         
     try:
         with open(prompt_path, 'r', encoding='utf-8') as f:
             return f.read()
     except Exception as e:
-        print(f"Error loading prompt {prompt_file_name}: {e}")
+        logger.warning("Error loading prompt %s: %s", prompt_file_name, e)
         return "당신은 '현실적인 선배/상사형 리스크 관리 에이전트'입니다."
 
 # Load the system prompt from file
@@ -350,12 +353,15 @@ class SimilarityEngine:
     
     def _initialize_embeddings(self):
         """Pre-compute embeddings for reference phrases"""
-        print("SimilarityEngine: Initializing reference embeddings...")
+        logger.debug("SimilarityEngine: initializing reference embeddings")
         for phrase in self.reference_phrases:
             embedding = get_embedding(phrase)
             if embedding:
                 self.reference_embeddings.append(embedding)
-        print(f"SimilarityEngine: Loaded {len(self.reference_embeddings)} reference embeddings")
+        logger.debug(
+            "SimilarityEngine: loaded %s reference embeddings",
+            len(self.reference_embeddings),
+        )
     
     def _cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
         """Calculate cosine similarity between two vectors"""
@@ -377,7 +383,7 @@ class SimilarityEngine:
             bool or tuple: Similarity check result
         """
         if not self.reference_embeddings:
-            print("Warning: No reference embeddings available")
+            logger.warning("SimilarityEngine: no reference embeddings available")
             return (False, 0.0) if return_score else False
         
         user_embedding = get_embedding(user_input)
@@ -469,7 +475,7 @@ class ConversationManager:
             }
         
         except Exception as e:
-            print(f"Error in assess_conversation_progress: {e}")
+            logger.warning("Error in assess_conversation_progress: %s", e)
             return {
                 "status": "error",
                 "analysis_ready": False,
@@ -514,21 +520,21 @@ class RAGConnector:
             ])
             full_query = f"{recent_context} {user_input}"
         
-        # Use basic search (filtering will be done post-retrieval)
-        from backend.rag.retriever import search
-        all_documents = search(full_query, k=k)
-        
-        # Filter by RAG_DATASETS (risk-specific document types)
-        filtered_documents = []
-        for doc in all_documents:
-            metadata = doc.get("metadata", {})
-            doc_category = metadata.get("original_category", "")
-            
-            # Check if document belongs to risk-related datasets
-            if doc_category in RAG_DATASETS:
-                filtered_documents.append(doc)
-        
-        print(f"RAGConnector: Retrieved {len(all_documents)} docs, filtered to {len(filtered_documents)} risk-related docs")
+        # Use tool: search_risk_cases
+        from backend.agents.riskmanaging.tools import search_risk_cases
+
+        filtered_documents = search_risk_cases.invoke(
+            {
+                "query": full_query,
+                "k": k,
+                "datasets": RAG_DATASETS,
+            }
+        )
+
+        logger.debug(
+            "RAGConnector: retrieved %s risk-related documents",
+            len(filtered_documents),
+        )
         return filtered_documents
     
     def extract_similar_cases_and_evidence(
@@ -662,7 +668,7 @@ class RiskEngine:
             )
         
         except Exception as e:
-            print(f"Error in evaluate_risk: {e}")
+            logger.warning("Error in evaluate_risk: %s", e)
             # Return default risk scoring
             return RiskScoring(
                 overall_risk_level="medium",
@@ -771,7 +777,7 @@ class ReportGenerator:
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
-            print(f"Error generating input summary: {e}")
+            logger.warning("Error generating input summary: %s", e)
             return agent_input.user_input
     
     def _generate_loss_simulation(self, risk_scoring: RiskScoring) -> LossSimulation:
@@ -801,7 +807,7 @@ class ReportGenerator:
                 qualitative=qualitative
             )
         except Exception as e:
-            print(f"Error generating loss simulation: {e}")
+            logger.warning("Error generating loss simulation: %s", e)
             return LossSimulation(
                 quantitative=None,
                 qualitative="손실 시뮬레이션 생성 중 오류 발생"
@@ -843,7 +849,7 @@ class ReportGenerator:
                 recommendations=gap_data.get("recommendations", [])
             )
         except Exception as e:
-            print(f"Error generating control gap analysis: {e}")
+            logger.warning("Error generating control gap analysis: %s", e)
             return ControlGapAnalysis(
                 identified_gaps=["분석 중 오류 발생"],
                 recommendations=[]
@@ -895,7 +901,7 @@ class ReportGenerator:
                 long_term=strategy_data.get("long_term", [])
             )
         except Exception as e:
-            print(f"Error generating prevention strategy: {e}")
+            logger.warning("Error generating prevention strategy: %s", e)
             return PreventionStrategy(
                 short_term=["전략 생성 중 오류 발생"],
                 long_term=[]
@@ -924,7 +930,7 @@ class ReportGenerator:
 
 # Node function for preparing the initial state
 def prepare_risk_state_node(state: RiskManagingGraphState) -> Dict[str, Any]:
-    print("---prepare_risk_state_node---")
+    logger.debug("risk node: prepare_risk_state")
     # Extract from state directly (no agent_input needed)
     user_input = state.get("current_user_input", "")
     conversation_history = state.get("conversation_history", [])
@@ -946,7 +952,7 @@ def prepare_risk_state_node(state: RiskManagingGraphState) -> Dict[str, Any]:
 
 # Node function for detecting trigger words and similarity
 def detect_trigger_and_similarity_node(state: RiskManagingGraphState) -> Dict[str, Any]:
-    print("---detect_trigger_and_similarity_node---")
+    logger.debug("risk node: detect_trigger_and_similarity")
     user_input = state.get("current_user_input", "")
     
     # Trigger word detection
@@ -972,7 +978,7 @@ def detect_trigger_and_similarity_node(state: RiskManagingGraphState) -> Dict[st
 
 # Node function for assessing conversation progress
 def assess_conversation_progress_node(state: RiskManagingGraphState) -> Dict[str, Any]:
-    print("---assess_conversation_progress_node---")
+    logger.debug("risk node: assess_conversation_progress")
     agent_input = RiskManagingAgentInput(
         user_input=state["current_user_input"],
         conversation_history=state["conversation_history"]
@@ -1013,7 +1019,7 @@ def assess_conversation_progress_node(state: RiskManagingGraphState) -> Dict[str
 
 # Node function for performing full risk analysis (RAG, Risk Engine, Report Gen)
 def perform_full_analysis_node(state: RiskManagingGraphState) -> Dict[str, Any]:
-    print("---perform_full_analysis_node---")
+    logger.debug("risk node: perform_full_analysis")
     user_input = state["current_user_input"]
     conversation_history = state["conversation_history"]
     
@@ -1062,9 +1068,10 @@ def perform_full_analysis_node(state: RiskManagingGraphState) -> Dict[str, Any]:
 
 # Node function for formatting the final output
 def format_final_output_node(state: RiskManagingGraphState) -> Dict[str, Any]:
-    print("---format_final_output_node---")
+    logger.debug("risk node: format_final_output")
     report = state.get("report_generated")
     error_message = state.get("error_message")
+    agent_response_from_state = state.get("agent_response")
 
     if error_message:
         final_response_content = f"죄송합니다. 처리 중 오류가 발생했습니다: {error_message}"
@@ -1072,25 +1079,29 @@ def format_final_output_node(state: RiskManagingGraphState) -> Dict[str, Any]:
     elif report:
         final_response_content = report.model_dump_json(indent=2, exclude_none=True)
         final_metadata = {"status": "success", "analysis_id": report.analysis_id}
+    elif agent_response_from_state:
+        # Use intermediate response (e.g. follow-up questions from conversation assessment)
+        final_response_content = str(agent_response_from_state)
+        final_metadata = {"status": "insufficient_info", "analysis_id": None}
     else:
-            # Fallback for when analysis is not complete but no specific error
-            final_response_content = "리스크 분석을 완료하지 못했습니다. 더 많은 정보가 필요하거나, 다시 시도해 주십시오."
-            final_metadata = {"status": "incomplete", "analysis_id": None}
+        # Fallback for when analysis is not complete but no specific error
+        final_response_content = "리스크 분석을 완료하지 못했습니다. 더 많은 정보가 필요하거나, 다시 시도해 주십시오."
+        final_metadata = {"status": "incomplete", "analysis_id": None}
 
     agent_response = RiskManagingAgentResponse(
-            response=final_response_content,
-            agent_type="riskmanaging",
-            metadata=final_metadata
-        )
+        response=final_response_content,
+        agent_type="riskmanaging",
+        metadata=final_metadata
+    )
 
     return {
-            "agent_response": agent_response,
-            "conversation_stage": "completed"
-        }
+        "agent_response": agent_response,
+        "conversation_stage": "completed"
+    }
 
 # Error handling node
 def handle_risk_error_node(state: RiskManagingGraphState, error: Exception) -> Dict[str, Any]:
-    print(f"---handle_risk_error_node--- Error: {error}")
+    logger.error("risk node error: %s", error)
     return {
             "error_message": str(error),
             "conversation_stage": "error",
