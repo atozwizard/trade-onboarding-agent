@@ -16,6 +16,20 @@ UNIFIED_METADATA_SCHEMA = {
     "source_dataset": "unknown"
 }
 
+
+def _is_empty_or_generic(value: Any) -> bool:
+    generic_tokens = {"", "unknown", "general", "general_info", "general_trade", "document"}
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return value.strip().lower() in generic_tokens
+    if isinstance(value, list):
+        if not value:
+            return True
+        lowered = {str(item).strip().lower() for item in value if str(item).strip()}
+        return not lowered or lowered.issubset(generic_tokens)
+    return False
+
 def normalize_metadata(entry: Dict[str, Any], source_file: str) -> Dict[str, Any]:
     """
     Normalizes metadata for a given entry to ensure all fields in the UNIFIED_METADATA_SCHEMA exist,
@@ -29,7 +43,15 @@ def normalize_metadata(entry: Dict[str, Any], source_file: str) -> Dict[str, Any
         Dict[str, Any]: A new dictionary with all unified metadata fields, with defaults
                         for any missing fields and ensuring correct type (list/string).
     """
+    base_name = os.path.basename(source_file).replace(".json", "")
     metadata = entry.get("metadata", {})
+    context_metadata = entry.get("context_metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+    if isinstance(context_metadata, dict):
+        # scenarios_master 같은 파일은 metadata 대신 context_metadata를 사용
+        metadata = {**context_metadata, **metadata}
+
     normalized = UNIFIED_METADATA_SCHEMA.copy()
     
     # Store all existing metadata fields first
@@ -37,37 +59,76 @@ def normalize_metadata(entry: Dict[str, Any], source_file: str) -> Dict[str, Any
         normalized[key] = value
 
     # Set original_category from entry's category field
-    normalized["original_category"] = entry.get("category", "unknown")
+    normalized["original_category"] = entry.get("category", base_name or "unknown")
 
+    forced_doc_type_by_source = {
+        "scenarios_master": "scenario_case",
+        "users_master": "user_profile",
+        "mistakes_master": "common_mistake",
+    }
+    forced_doc_type = forced_doc_type_by_source.get(base_name)
+    if forced_doc_type:
+        normalized["document_type"] = forced_doc_type
     # Infer document_type based on category or source_file name if not explicitly set
-    if "document_type" not in metadata or metadata.get("document_type") == "unknown":
-        base_name = os.path.basename(source_file).replace(".json", "")
-        if base_name == "emails":
-            normalized["document_type"] = "email"
-        elif base_name == "claims":
-            normalized["document_type"] = "claim_type"
-        elif base_name == "company_domain":
-            normalized["document_type"] = "terminology"
-        elif base_name == "country_rules":
-            normalized["document_type"] = "country_guideline"
-        elif base_name == "document_errors":
-            normalized["document_type"] = "error_checklist"
-        elif base_name == "internal_process":
-            normalized["document_type"] = "process_flow"
-        elif base_name == "kpi":
-            normalized["document_type"] = "kpi_metric"
-        elif base_name == "mistakes":
-            normalized["document_type"] = "common_mistake"
-        elif base_name == "negotiation":
-            normalized["document_type"] = "negotiation_strategy"
-        elif base_name == "quiz_samples":
-            normalized["document_type"] = "quiz_question"
-        elif base_name == "trade_qa":
-            normalized["document_type"] = "faq"
-        elif normalized["original_category"] != "unknown":
-            normalized["document_type"] = normalized["original_category"] # Fallback to category
-        else:
-            normalized["document_type"] = "document" # Generic fallback
+    elif "document_type" not in metadata or metadata.get("document_type") == "unknown":
+        inferred_type = None
+
+        if metadata.get("doc_type"):
+            doc_type_candidate = str(metadata.get("doc_type")).strip().lower()
+            if doc_type_candidate not in {"", "unknown", "document"}:
+                inferred_type = doc_type_candidate
+
+        source_doc_type_map = {
+            "emails": "email",
+            "claims": "claim_type",
+            "company_domain": "terminology",
+            "country_rules": "country_guideline",
+            "document_errors": "error_checklist",
+            "internal_process": "process_flow",
+            "kpi": "kpi_metric",
+            "mistakes": "common_mistake",
+            "negotiation": "negotiation_strategy",
+            "quiz_samples": "quiz_question",
+            "trade_qa": "faq",
+            "ceo_style": "ceo_guideline",
+            "trade_terminology": "trade_terminology",
+            "trade_dictionary_full": "trade_terminology",
+            "icc_trade_terms": "trade_terminology",
+            "raw_trade_dictionary": "trade_terminology",
+            "raw_trade_terms": "trade_terminology",
+            "mistakes_master": "common_mistake",
+            "scenarios_master": "scenario_case",
+            "users_master": "user_profile",
+        }
+        if not inferred_type:
+            inferred_type = source_doc_type_map.get(base_name)
+
+        if not inferred_type and normalized["original_category"] != "unknown":
+            inferred_type = normalized["original_category"]
+
+        normalized["document_type"] = inferred_type or "document"
+
+    # Enrich sparse topic/situation defaults for high-volume document types.
+    fallback_topic_by_doc_type = {
+        "trade_terminology": ["trade_terms"],
+        "scenario_case": ["risk_scenario"],
+        "user_profile": ["coaching_profile"],
+    }
+    fallback_situation_by_doc_type = {
+        "trade_terminology": ["learning"],
+        "scenario_case": ["work_review"],
+        "user_profile": ["onboarding"],
+    }
+
+    if _is_empty_or_generic(normalized.get("topic")):
+        inferred_topic = fallback_topic_by_doc_type.get(str(normalized.get("document_type", "")).lower())
+        if inferred_topic:
+            normalized["topic"] = inferred_topic
+
+    if _is_empty_or_generic(normalized.get("situation")):
+        inferred_situation = fallback_situation_by_doc_type.get(str(normalized.get("document_type", "")).lower())
+        if inferred_situation:
+            normalized["situation"] = inferred_situation
 
     # Special handling for ceo_style's existing "priority" field (rename to ceo_focus)
     if normalized["original_category"] == "ceo_style" and "priority" in metadata:
@@ -137,8 +198,7 @@ if __name__ == '__main__':
     
     assert normalized_1["source_dataset"] == "test_file_1.json"
     assert normalized_1["original_category"] == "test_cat"
-    # assert normalized_1["document_type"] == "test_cat"
-    assert normalized_1["document_type"] == "document" # Generic fallback
+    assert normalized_1["document_type"] == "test_cat"
     assert normalized_1["role"] == ["unknown"]
     assert normalized_1["situation"] == ["general"]
     assert normalized_1["priority"] == "normal"

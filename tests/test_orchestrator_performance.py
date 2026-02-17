@@ -1,63 +1,67 @@
 """
-Orchestrator 성능 테스트
+Micro performance tests for core orchestrator node operations.
+
+These tests avoid external network/API dependencies.
 """
-import pytest
+from __future__ import annotations
+
 import time
-from backend.agents.orchestrator import Orchestrator
-from backend.infrastructure.upstage_llm import UpstageLLMGateway
-from backend.infrastructure.chroma_retriever import ChromaDocumentRetriever
-from backend.config import get_settings
+from typing import Any, Dict
+
+from backend.agents.orchestrator import nodes as orchestrator_nodes
 
 
-@pytest.fixture
-def orchestrator():
-    settings = get_settings()
-    llm = UpstageLLMGateway(api_key=settings.upstage_api_key)
-    retriever = ChromaDocumentRetriever(settings)
-    return Orchestrator(llm, retriever)
+def make_state(**overrides) -> Dict[str, Any]:
+    base: Dict[str, Any] = {
+        "session_id": "perf-session",
+        "user_input": "선적 지연 리스크를 검토해줘",
+        "context": {},
+        "conversation_history": [],
+        "active_agent": None,
+        "agent_specific_state": {},
+        "orchestrator_response": None,
+        "llm_intent_classification": None,
+        "selected_agent_name": None,
+    }
+    base.update(overrides)
+    return base
 
 
-def test_email_coach_response_time(orchestrator):
-    """Email Coach 응답 시간 측정 (목표: 15초 이내)"""
-    start = time.time()
+def test_keyword_routing_speed():
+    state = make_state()
 
-    result = orchestrator.run("이메일 검토: We ship via FOB", {})
+    start = time.perf_counter()
+    for _ in range(2000):
+        updated = orchestrator_nodes.detect_intent_and_route_node(dict(state))
+        assert updated["selected_agent_name"] == "riskmanaging"
+    elapsed = time.perf_counter() - start
 
-    elapsed = time.time() - start
-
-    print(f"\n응답 시간: {elapsed:.2f}초")
-    assert result.agent_type == "email_coach"
-    assert elapsed < 20.0  # 20초 이내 (여유 있게)
-
-
-def test_intent_classification_speed(orchestrator):
-    """의도 분류 속도 측정 (목표: 3초 이내)"""
-    start = time.time()
-
-    result = orchestrator.run("퀴즈 내줘", {})
-
-    elapsed = time.time() - start
-
-    print(f"\n의도 분류 + 응답 시간: {elapsed:.2f}초")
-    assert result.agent_type == "quiz"
-    assert elapsed < 5.0  # 5초 이내
+    # Very generous threshold to avoid flaky CI failures.
+    assert elapsed < 2.0
 
 
-def test_multiple_requests_performance(orchestrator):
-    """연속 요청 성능 측정"""
-    requests = [
-        "이메일 검토해줘",
-        "퀴즈 내줘",
-        "실수 알려줘",
-    ]
+def test_response_normalization_speed():
+    report_payload = {
+        "response": {
+            "analysis_id": "a1",
+            "risk_scoring": {
+                "overall_risk_level": "high",
+                "overall_risk_score": 12.0,
+                "risk_factors": [],
+            },
+            "response_summary": "요약",
+            "suggested_actions": ["조치 1"],
+        },
+        "agent_type": "riskmanaging",
+        "metadata": {},
+    }
 
-    total_time = 0
-    for req in requests:
-        start = time.time()
-        orchestrator.run(req, {})
-        elapsed = time.time() - start
-        total_time += elapsed
+    state = make_state(orchestrator_response=report_payload)
 
-    avg_time = total_time / len(requests)
-    print(f"\n평균 응답 시간: {avg_time:.2f}초")
-    assert avg_time < 10.0  # 평균 10초 이내
+    start = time.perf_counter()
+    for _ in range(2000):
+        normalized = orchestrator_nodes.normalize_response_node(dict(state))
+        assert normalized["type"] == "report"
+    elapsed = time.perf_counter() - start
+
+    assert elapsed < 2.0
