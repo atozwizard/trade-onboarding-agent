@@ -152,6 +152,7 @@ class QuizAgent(BaseAgent):
             "llm_output_details": None,
             "model_used": None,
             "quiz_generation_difficulty": None,
+            "quiz_question_count": None,
             "final_metadata": None,
             "agent_output_for_orchestrator": None,
         }

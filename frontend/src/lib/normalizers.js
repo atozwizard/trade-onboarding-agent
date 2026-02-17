@@ -64,6 +64,35 @@ function extractQuizQuestions(payload) {
   return [];
 }
 
+function normalizeQuizQuestionShape(question) {
+  if (!question || typeof question !== "object") {
+    return null;
+  }
+
+  const questionText = String(question.question || "").trim();
+  if (!questionText) {
+    return null;
+  }
+
+  const choices = Array.isArray(question.choices)
+    ? question.choices.map((choice) => String(choice))
+    : [];
+
+  let answer = Number(question.answer);
+  if (!Number.isFinite(answer)) {
+    answer = null;
+  }
+
+  return {
+    question: questionText,
+    choices,
+    answer,
+    explanation: String(question.explanation || "").trim(),
+    quiz_type: String(question.quiz_type || "").trim(),
+    difficulty: String(question.difficulty || "").trim(),
+  };
+}
+
 export function normalizeRiskFactors(report = {}) {
   const scoring = report.risk_scoring && typeof report.risk_scoring === "object" ? report.risk_scoring : {};
   const rawFactors = scoring.risk_factors ?? report.risk_factors ?? [];
@@ -130,14 +159,23 @@ export function normalizeApiResponse(raw) {
     typeof raw.message === "string"
       ? raw.message
       : JSON.stringify(raw.message ?? raw, null, 2);
+  const meta = raw.meta && typeof raw.meta === "object" ? raw.meta : {};
+  const metaQuizQuestions = Array.isArray(meta.quiz_questions)
+    ? meta.quiz_questions.map(normalizeQuizQuestionShape).filter(Boolean)
+    : [];
 
   const parsedMessage = parseJsonFlexible(message);
   const quizQuestions = extractQuizQuestions(parsedMessage);
+  const normalizedParsedQuestions = quizQuestions
+    .map(normalizeQuizQuestionShape)
+    .filter(Boolean);
+  const effectiveQuizQuestions =
+    metaQuizQuestions.length > 0 ? metaQuizQuestions : normalizedParsedQuestions;
 
-  if (quizQuestions.length > 0) {
+  if (effectiveQuizQuestions.length > 0) {
     return {
       kind: "quiz",
-      questions: quizQuestions,
+      questions: effectiveQuizQuestions,
       text: "퀴즈가 생성되었습니다.",
     };
   }
@@ -190,7 +228,22 @@ export function shouldForceQuizMode(userInput, mode, lastAssistantMessage) {
     return true;
   }
 
-  return ["정답", "해설", "힌트", "다음 문제", "다음문제"].some((keyword) =>
+  return [
+    "정답",
+    "해설",
+    "힌트",
+    "다음 문제",
+    "다음문제",
+    "더 문제",
+    "문제 더",
+    "퀴즈 더",
+    "더 내줘",
+    "더줘",
+    "더 달라고",
+    "더 만들어",
+    "추가 문제",
+    "추가 퀴즈",
+  ].some((keyword) =>
     normalized.includes(keyword)
   );
 }

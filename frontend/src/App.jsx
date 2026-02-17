@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import MarkdownMessage from "./components/MarkdownMessage";
 import ReportCard from "./components/ReportCard";
 import { normalizeApiResponse, shouldForceQuizMode } from "./lib/normalizers";
 
@@ -20,50 +21,172 @@ function createSessionId() {
   return `session-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function QuizBlock({ questions, onSelectAnswer }) {
-  return (
-    <div className="quiz-block">
-      {questions.map((question, index) => {
-        const questionText = String(question.question || "질문 없음");
-        const choices = Array.isArray(question.choices) ? question.choices : [];
+function buildQuestionKey(question) {
+  const questionText = String(question?.question || "");
+  const choices = Array.isArray(question?.choices) ? question.choices.map(String).join("|") : "";
+  return `${questionText}::${choices}`;
+}
 
-        return (
-          <div className="quiz-card" key={`${questionText}-${index}`}>
-            <strong>[퀴즈 {index + 1}] {questionText}</strong>
-            <ol>
-              {choices.map((choice, choiceIndex) => (
-                <li key={`${questionText}-${choiceIndex}`}>
-                  <button
-                    type="button"
-                    className="choice-btn"
-                    onClick={() => onSelectAnswer(String(choiceIndex + 1))}
-                  >
-                    {choiceIndex + 1}. {String(choice)}
-                  </button>
-                </li>
-              ))}
-            </ol>
-          </div>
-        );
-      })}
-      <p className="muted">번호를 직접 입력해도 됩니다. 예: `2` 또는 `2번`</p>
-    </div>
+function mergeQuizQuestions(existingQuestions, incomingQuestions) {
+  const merged = [...existingQuestions];
+  const seen = new Set(existingQuestions.map((question) => buildQuestionKey(question)));
+
+  for (const incoming of incomingQuestions) {
+    const key = buildQuestionKey(incoming);
+    if (!key || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    merged.push({
+      ...incoming,
+      id: key,
+    });
+  }
+  return merged;
+}
+
+function QuizWorkspace({
+  questions,
+  answers,
+  onAnswer,
+  onReset,
+  onGenerateMore,
+  isSending,
+}) {
+  const solvedCount = Object.keys(answers).length;
+  const correctCount = questions.reduce((count, question) => {
+    const answerState = answers[question.id];
+    if (!answerState) {
+      return count;
+    }
+    return answerState.isCorrect ? count + 1 : count;
+  }, 0);
+  const totalCount = questions.length;
+  const currentIndex = questions.findIndex((question) => !answers[question.id]);
+  const isCompleted = totalCount > 0 && solvedCount >= totalCount;
+  const activeQuestion =
+    !isCompleted && currentIndex >= 0 ? questions[currentIndex] : null;
+  const wrongQuestions = questions.filter((question) => {
+    const answerState = answers[question.id];
+    if (!answerState) {
+      return false;
+    }
+    return !answerState.isCorrect;
+  });
+  const scorePercent =
+    totalCount > 0 ? Math.round((correctCount / totalCount) * 100) : 0;
+
+  return (
+    <aside className="quiz-panel">
+      <header className="quiz-panel-head">
+        <h3>퀴즈 풀이</h3>
+        <div className="quiz-panel-actions">
+          <button
+            type="button"
+            onClick={onGenerateMore}
+            disabled={isSending}
+          >
+            추가 문제 생성
+          </button>
+          <button type="button" onClick={onReset} disabled={questions.length === 0 || isSending}>
+            초기화
+          </button>
+        </div>
+      </header>
+      <p className="muted">
+        {questions.length === 0
+          ? "퀴즈가 생성되면 이 공간에서 바로 풀이할 수 있습니다."
+          : `진행: ${solvedCount}/${questions.length} | 정답: ${correctCount}`}
+      </p>
+
+      {questions.length === 0 ? (
+        <div className="quiz-empty">채팅에서 "무역실무 퀴즈내줘"를 입력해 시작하세요.</div>
+      ) : (
+        <>
+          {!isCompleted && activeQuestion ? (
+            <article className="quiz-workspace-card current">
+              <strong>
+                [문제 {currentIndex + 1}/{totalCount}] {String(activeQuestion.question)}
+              </strong>
+              <p className="muted">선택하면 다음 문제로 자동 이동합니다.</p>
+              <ul>
+                {(Array.isArray(activeQuestion.choices) ? activeQuestion.choices : []).map(
+                  (choice, choiceIdx) => (
+                    <li key={`${activeQuestion.id}-${choiceIdx}`}>
+                      <button
+                        type="button"
+                        className="quiz-option"
+                        onClick={() => onAnswer(activeQuestion, choiceIdx)}
+                      >
+                        {choiceIdx + 1}. {String(choice)}
+                      </button>
+                    </li>
+                  )
+                )}
+              </ul>
+            </article>
+          ) : null}
+
+          {isCompleted ? (
+            <section className="quiz-result-summary">
+              <h4>채점 결과</h4>
+              <p>
+                총 {totalCount}문제 중 {correctCount}문제 정답 ({scorePercent}%)
+              </p>
+              {wrongQuestions.length === 0 ? (
+                <p className="quiz-result correct">모든 문제를 맞췄습니다.</p>
+              ) : (
+                <ul className="quiz-review-list">
+                  {wrongQuestions.map((question, index) => {
+                    const answerState = answers[question.id];
+                    const selected = Number(answerState?.selected);
+                    const answer = Number(question.answer);
+                    return (
+                      <li key={`wrong-${question.id}`}>
+                        <strong>
+                          오답 {index + 1}. {String(question.question)}
+                        </strong>
+                        <p>
+                          내 답: {Number.isFinite(selected) ? selected + 1 : "-"}번 / 정답:{" "}
+                          {Number.isFinite(answer) ? answer + 1 : "-"}번
+                        </p>
+                        {question.explanation ? (
+                          <p className="muted">{String(question.explanation)}</p>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          ) : null}
+        </>
+      )}
+    </aside>
   );
 }
 
-function AssistantContent({ message, onQuickAnswer }) {
+function AssistantContent({ message }) {
   if (message.kind === "report") {
     return <ReportCard report={message.report} />;
   }
 
   if (message.kind === "quiz") {
-    return <QuizBlock questions={message.questions || []} onSelectAnswer={onQuickAnswer} />;
+    const count = Array.isArray(message.questions) ? message.questions.length : 0;
+    return (
+      <div className="quiz-notice">
+        <strong>퀴즈 생성 완료 ({count}문제)</strong>
+        <p className="muted">
+          오른쪽 패널에서 풀이를 진행하세요. 추가 문제가 필요하면 "추가 문제"라고 입력하세요.
+        </p>
+      </div>
+    );
   }
 
   if (message.kind === "email") {
     return (
       <div>
-        <p>{message.text}</p>
+        <MarkdownMessage text={message.text} />
         <pre>{JSON.stringify(message.data, null, 2)}</pre>
       </div>
     );
@@ -77,16 +200,20 @@ function AssistantContent({ message, onQuickAnswer }) {
     return (
       <div className="error-box">
         <strong>요청 처리 오류</strong>
-        <p>{message.text}</p>
+        <MarkdownMessage text={message.text} />
       </div>
     );
   }
 
-  return <p className="multiline">{message.text}</p>;
+  return <MarkdownMessage text={message.text} />;
 }
 
 export default function App() {
   const [messages, setMessages] = useState([]);
+  const [quizWorkspace, setQuizWorkspace] = useState({
+    questions: [],
+    answers: {},
+  });
   const [mode, setMode] = useState("auto");
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -114,6 +241,7 @@ export default function App() {
     }
     return null;
   }, [messages]);
+  const isQuizPanelOpen = quizWorkspace.questions.length > 0;
 
   const appendUserMessage = (text) => {
     const userMessage = {
@@ -138,10 +266,46 @@ export default function App() {
     localStorage.setItem(SESSION_STORAGE_KEY, nextSession);
     setSessionId(nextSession);
     setMessages([]);
+    setQuizWorkspace({ questions: [], answers: {} });
     setInputValue("");
   };
 
-  const sendMessage = async (rawText) => {
+  const appendQuizQuestionsToWorkspace = (questions) => {
+    if (!Array.isArray(questions) || questions.length === 0) {
+      return;
+    }
+    setQuizWorkspace((prev) => ({
+      ...prev,
+      questions: mergeQuizQuestions(prev.questions, questions),
+    }));
+  };
+
+  const handleWorkspaceAnswer = (question, selected) => {
+    if (!question || !question.id) {
+      return;
+    }
+    const correctAnswer = Number(question.answer);
+    const isCorrect = Number.isFinite(correctAnswer) ? selected === correctAnswer : false;
+    setQuizWorkspace((prev) => ({
+      ...prev,
+      answers: {
+        ...prev.answers,
+        [question.id]: {
+          selected,
+          isCorrect,
+        },
+      },
+    }));
+  };
+
+  const resetWorkspaceProgress = () => {
+    setQuizWorkspace((prev) => ({
+      ...prev,
+      answers: {},
+    }));
+  };
+
+  const sendMessage = async (rawText, options = {}) => {
     const text = String(rawText || "").trim();
     if (!text || isSending) {
       return;
@@ -156,7 +320,9 @@ export default function App() {
       message: text,
     };
 
-    if (mode !== "auto") {
+    if (options.forceQuizMode) {
+      payload.context = { mode: "quiz" };
+    } else if (mode !== "auto") {
       payload.context = { mode };
     } else if (shouldForceQuizMode(text, mode, lastAssistantMessage)) {
       payload.context = { mode: "quiz" };
@@ -190,6 +356,9 @@ export default function App() {
 
       const normalized = normalizeApiResponse(data);
       appendAssistantMessage(normalized);
+      if (normalized.kind === "quiz") {
+        appendQuizQuestionsToWorkspace(normalized.questions || []);
+      }
     } catch (error) {
       appendAssistantMessage({
         kind: "error",
@@ -205,8 +374,12 @@ export default function App() {
     sendMessage(inputValue);
   };
 
+  const handleGenerateMoreQuiz = () => {
+    sendMessage("추가 문제 만들어줘", { forceQuizMode: true });
+  };
+
   return (
-    <div className="page">
+    <div className={isQuizPanelOpen ? "page page-with-quiz" : "page"}>
       <aside className="sidebar">
         <h1>TradeOnboarding</h1>
         <p className="muted">무역 실무 온보딩 AI 코치</p>
@@ -261,7 +434,7 @@ export default function App() {
               {message.role === "user" ? (
                 <p className="multiline">{message.text}</p>
               ) : (
-                <AssistantContent message={message} onQuickAnswer={sendMessage} />
+                <AssistantContent message={message} />
               )}
             </article>
           ))}
@@ -283,6 +456,17 @@ export default function App() {
           </button>
         </form>
       </main>
+
+      {isQuizPanelOpen ? (
+        <QuizWorkspace
+          questions={quizWorkspace.questions}
+          answers={quizWorkspace.answers}
+          onAnswer={handleWorkspaceAnswer}
+          onReset={resetWorkspaceProgress}
+          onGenerateMore={handleGenerateMoreQuiz}
+          isSending={isSending}
+        />
+      ) : null}
     </div>
   );
 }

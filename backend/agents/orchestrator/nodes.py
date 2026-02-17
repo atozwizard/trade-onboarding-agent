@@ -256,6 +256,15 @@ def detect_intent_and_route_node(state: OrchestratorGraphState) -> Dict[str, Any
                 "난이도",
                 "쉽게",
                 "어렵게",
+                "더 문제",
+                "문제 더",
+                "퀴즈 더",
+                "더 내줘",
+                "더줘",
+                "더 달라고",
+                "더 만들어",
+                "추가 문제",
+                "추가 퀴즈",
             ]
 
             if (
