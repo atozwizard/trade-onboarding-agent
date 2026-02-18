@@ -100,41 +100,34 @@ def build_user_instruction(user_profile: dict) -> str:
 
 
 CONVERSATION_ASSESSMENT_PROMPT = """
-당신은 리스크 분석을 위한 정보를 수집하는 '현실적인 선배/상사형 리스크 관리 에이전트'입니다.
-현재까지의 대화 내용과 사용자 질의를 바탕으로, 리스크 평가에 필요한 핵심 정보를 추출하고, 정보 확보 여부를 판단해야 합니다.
+당신은 리스크 분석을 위한 정보를 수집하고 사용자와 협업하는 '현실적인 선배/상사형 리스크 관리 에이전트'입니다.
+
+[System Directive: LLM Interaction Mode — Mandatory]
+1. 모든 출력은 반드시 사용자와 상호작용하는 대화형(Q&A) 구조로만 진행한다.
+2. **자동 보고서 생성 금지**: 정보가 충분하더라도 사용자의 명시적 요청이나 승인 없이 최종 보고서를 출력하지 않는다.
+3. **중간 추론 공유**: 정보가 어느 정도 모였다면, 지금까지 파악된 리스크의 핵심을 상사처럼 짧게 언급("중간 추론")하고, 보고서 작성을 원하는지 물어본다.
 
 <추출 항목>
--   **계약 금액 (contract_amount):** 계약의 총 규모 (예: "10만 달러", "5000만원"). 숫자와 단위를 포함하여 최대한 구체적으로 추출하십시오. 알 수 없으면 필드를 생략하거나 `null`로 기재하십시오.
--   **페널티 정보 (penalty_info):** 지연, 품질 이슈 등으로 발생할 수 있는 페널티 조항 (예: "5일 지연 시 일당 1% 페널티", "별도 페널티 조항 없음"). 최대한 구체적으로 추출하십시오. 알 수 없으면 필드를 생략하거나 `null`로 기재하십시오.
--   **예상 손실 (loss_estimate):** 금전적 또는 비금전적 예상 손실 규모 (예: "5천 달러", "1000만원", "생산 라인 중단"). 최대한 구체적으로 추출하십시오. 알 수 없으면 필드를 생략하거나 `null`로 기재하십시오.
--   **지연 일수 (delay_days):** 예상되는 지연 기간 (예: 5, 7, 14). 숫자만 추출하십시오. 알 수 없으면 필드를 생략하거나 `null`로 기재하십시오.
--   **지연 리스크 (delay_risk):** 지연에 대한 정성적 정보 (예: "납기 지연 가능성 높음", "생산 라인 중단"). 최대한 구체적으로 추출하십시오. 알 수 없으면 필드를 생략하거나 `null`로 기재하십시오.
+-   **계약 금액 (contract_amount)**
+-   **페널티 정보 (penalty_info)**
+-   **예상 손실 (loss_estimate)**
+-   **지연 일수 (delay_days)**
+-   **지연 리스크 (delay_risk)**
 
-<평가 항목>
--   **상황 명확성:** 사용자 질의의 핵심 상황이 명확한가? (예: 특정 프로젝트, 거래, 사건)
--   **유연한 판단 (최우선):** 사용자가 정보를 더 이상 제공할 수 없다고 명시하거나(예: "모른다", "그냥 해줘", "정보가 이게 전부다"), 현재 정보만으로도 일반적인 무역 리스크 관례에 기반한 가설적 조언이 가능하다면 무조건 **"sufficient"**로 판단하고 분석 단계로 넘어가십시오.
--   **관련 정보:** 리스크 평가에 필요한 최소한의 정보(계약 금액, 페널티 정보, 예상 손실)가 포함되어 있는가? (부족해도 가설을 세울 수 있다면 진행 가능)
--   **모호성 여부:** 추가적인 질문 없이 바로 리스크 분석으로 넘어가면 잘못된 분석 결과를 낼 가능성이 있는가? (단, 가설 기반임을 명시하고 진행하면 됨)
-
-사용자가 정보를 더 주기를 거부하거나 지금 바로 분석을 원한다면, 반드시 **"sufficient"**를 반환하십시오.
-정보가 절대적으로 부족하고(예: 상황조차 모름) 사용자가 아직 정보를 더 줄 의사가 있는 경우에만 **"insufficient"**로 판단하십시오.
+<보고서 생성 허용 조건>
+1. [조건 A - 사용자 명시 요청]: 사용자가 "보고서로 만들어", "최종 정리해", "출력해" 등 명시적으로 결과물을 요구한 경우.
+2. [조건 B - 제안 후 승인]: 당신이 "보고서로 정리할까요?"라고 제안했고 사용자가 "응", "OK", "진행해" 등 긍정 응답한 경우.
 
 <응답 형식>
-```json
-{{
+반드시 아래 JSON 형식을 지키십시오.
+{
     "status": "sufficient" | "insufficient",
-    "message": "...",
-    "analysis_ready": true | false, // 이 값은 ConversationManager의 내부 로직에 의해 최종 결정됩니다.
-    "follow_up_questions": ["..."], // "status"가 "insufficient"인 경우에만 포함.
-    "extracted_data": {{
-        "contract_amount": "string | null", // 추출된 계약 금액 (예: "10만 달러", "5000만원", null)
-        "penalty_info": "string | null",    // 추출된 페널티 정보 (예: "5일 지연 시 일당 1% 페널티", "별도 페널티 조항 없음", null)
-        "loss_estimate": "string | null",    // 추출된 예상 손실 (예: "5천 달러", "1000만원", "생산 라인 중단", null)
-        "delay_days": "integer | null",     // 추출된 지연 일수 (예: 5, 7, null)
-        "delay_risk": "string | null"       // 추출된 지연 리스크 (예: "납기 지연 가능성 높음", null)
-    }}
-}}
-```
+    "report_requested": true | false, // 위의 조건 A 또는 B 충족 시에만 true
+    "message": "상사/선배 톤의 대화 메시지. 충분한 경우 중간 추론을 포함하고 보고서 생성 여부를 문의하십시오.",
+    "follow_up_questions": ["..."],
+    "extracted_data": { ... }
+}
+
 <이미 파악된 정보>
 {{extracted_data}}
 
@@ -144,7 +137,7 @@ CONVERSATION_ASSESSMENT_PROMPT = """
 <사용자 최신 질의>
 {{user_input}}
 
-판단해주십시오.
+상황을 평가하여 JSON으로만 응답하십시오.
 """
 
 RISK_ENGINE_EVALUATION_PROMPT = """
@@ -461,12 +454,16 @@ class ConversationManager:
             
             assessment = json.loads(response_text)
             
-            # Determine analysis_ready based on status
-            analysis_ready = assessment.get("status") == "sufficient"
+            # Collaborative Mode Logic: 
+            # analysis_ready is True ONLY IF (status is sufficient) AND (report_requested is True)
+            status = assessment.get("status", "insufficient")
+            report_requested = assessment.get("report_requested", False)
+            analysis_ready = (status == "sufficient") and report_requested
             
             return {
-                "status": assessment.get("status", "insufficient"),
+                "status": status,
                 "analysis_ready": analysis_ready,
+                "report_requested": report_requested,
                 "message": assessment.get("message", ""),
                 "follow_up_questions": assessment.get("follow_up_questions", []),
                 "extracted_data": assessment.get("extracted_data", {}),
@@ -1001,6 +998,7 @@ def assess_conversation_progress_node(state: RiskManagingGraphState) -> Dict[str
     state_updates = {
         "extracted_data": merged_data,
         "analysis_ready": assessment_result.get("analysis_ready", False),
+        "report_requested": assessment_result.get("report_requested", False),
         "conversation_stage": assessment_result.get("conversation_stage", "gathering_info"),
         "analysis_in_progress": assessment_result.get("analysis_in_progress", True),
         "agent_response": assessment_result.get("message"), # The message from CM is the response

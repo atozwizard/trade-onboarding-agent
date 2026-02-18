@@ -108,6 +108,7 @@ class RiskManagingGraphState(TypedDict):
     # Conversation management
     analysis_ready: bool  # Whether enough info collected for analysis
     analysis_in_progress: bool  # Whether analysis session is ongoing
+    report_requested: bool  # Whether user has explicitly requested or approved report generation
     conversation_stage: str  # Current stage of conversation
     extracted_data: Dict[str, Any]  # Data extracted from conversation
     user_profile: Optional[Dict[str, Any]]  # User persona information
