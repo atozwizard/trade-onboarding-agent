@@ -48,6 +48,8 @@ function mergeQuizQuestions(existingQuestions, incomingQuestions) {
 function QuizWorkspace({
   questions,
   answers,
+  activeIndex,
+  onSelectQuestion,
   onAnswer,
   onReset,
   onGenerateMore,
@@ -63,10 +65,15 @@ function QuizWorkspace({
     return answerState.isCorrect ? count + 1 : count;
   }, 0);
   const totalCount = questions.length;
-  const currentIndex = questions.findIndex((question) => !answers[question.id]);
+  const safeActiveIndex =
+    totalCount > 0 ? Math.min(Math.max(activeIndex, 0), totalCount - 1) : 0;
   const isCompleted = totalCount > 0 && solvedCount >= totalCount;
-  const activeQuestion =
-    !isCompleted && currentIndex >= 0 ? questions[currentIndex] : null;
+  const activeQuestion = totalCount > 0 ? questions[safeActiveIndex] : null;
+  const answerState = activeQuestion ? answers[activeQuestion.id] : null;
+  const selectedChoice = Number(answerState?.selected);
+  const correctChoice = Number(activeQuestion?.answer);
+  const isAnswered = Boolean(answerState);
+  const isCurrentAnswerCorrect = isAnswered && Boolean(answerState?.isCorrect);
   const wrongQuestions = questions.filter((question) => {
     const answerState = answers[question.id];
     if (!answerState) {
@@ -110,27 +117,74 @@ function QuizWorkspace({
           <div className="quiz-empty">채팅에서 "무역실무 퀴즈내줘"를 입력해 시작하세요.</div>
         ) : (
           <>
-            {!isCompleted && activeQuestion ? (
+            {activeQuestion ? (
               <article className="quiz-workspace-card current">
                 <strong>
-                  [문제 {currentIndex + 1}/{totalCount}] {String(activeQuestion.question)}
+                  [문제 {safeActiveIndex + 1}/{totalCount}] {String(activeQuestion.question)}
                 </strong>
-                <p className="muted">선택하면 다음 문제로 자동 이동합니다.</p>
+                <p className="muted">선택 즉시 채점되고 해설이 아래에 표시됩니다.</p>
                 <ul>
                   {(Array.isArray(activeQuestion.choices) ? activeQuestion.choices : []).map(
                     (choice, choiceIdx) => (
                       <li key={`${activeQuestion.id}-${choiceIdx}`}>
-                        <button
-                          type="button"
-                          className="quiz-option"
-                          onClick={() => onAnswer(activeQuestion, choiceIdx)}
-                        >
-                          {choiceIdx + 1}. {String(choice)}
-                        </button>
+                        {(() => {
+                          let optionClass = "quiz-option";
+                          if (isAnswered && Number.isFinite(correctChoice)) {
+                            if (choiceIdx === correctChoice) {
+                              optionClass += " correct";
+                            } else if (choiceIdx === selectedChoice) {
+                              optionClass += " wrong";
+                            }
+                          }
+                          return (
+                            <button
+                              type="button"
+                              className={optionClass}
+                              onClick={() => onAnswer(activeQuestion, choiceIdx)}
+                              disabled={isSending || isAnswered}
+                            >
+                              {choiceIdx + 1}. {String(choice)}
+                            </button>
+                          );
+                        })()}
                       </li>
                     )
                   )}
                 </ul>
+
+                {isAnswered ? (
+                  <p className={`quiz-result ${isCurrentAnswerCorrect ? "correct" : "wrong"}`}>
+                    {isCurrentAnswerCorrect
+                      ? `정답입니다. (${selectedChoice + 1}번)`
+                      : `오답입니다. 정답은 ${Number.isFinite(correctChoice) ? correctChoice + 1 : "-"}번입니다.`}
+                  </p>
+                ) : (
+                  <p className="quiz-result">아직 답안을 선택하지 않았습니다.</p>
+                )}
+
+                {isAnswered && activeQuestion.explanation ? (
+                  <div className="quiz-explanation">
+                    <strong>해설</strong>
+                    <p>{String(activeQuestion.explanation)}</p>
+                  </div>
+                ) : null}
+
+                <div className="quiz-navigation">
+                  <button
+                    type="button"
+                    onClick={() => onSelectQuestion(safeActiveIndex - 1)}
+                    disabled={safeActiveIndex <= 0}
+                  >
+                    이전 문제
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSelectQuestion(safeActiveIndex + 1)}
+                    disabled={safeActiveIndex >= totalCount - 1}
+                  >
+                    다음 문제
+                  </button>
+                </div>
               </article>
             ) : null}
 
@@ -148,14 +202,29 @@ function QuizWorkspace({
                       const answerState = answers[question.id];
                       const selected = Number(answerState?.selected);
                       const answer = Number(question.answer);
+                      const choices = Array.isArray(question.choices) ? question.choices : [];
+                      const selectedText =
+                        Number.isFinite(selected) &&
+                        selected >= 0 &&
+                        selected < choices.length
+                          ? String(choices[selected])
+                          : "-";
+                      const answerText =
+                        Number.isFinite(answer) &&
+                        answer >= 0 &&
+                        answer < choices.length
+                          ? String(choices[answer])
+                          : "-";
                       return (
                         <li key={`wrong-${question.id}`}>
                           <strong>
                             오답 {index + 1}. {String(question.question)}
                           </strong>
                           <p>
-                            내 답: {Number.isFinite(selected) ? selected + 1 : "-"}번 / 정답:{" "}
-                            {Number.isFinite(answer) ? answer + 1 : "-"}번
+                            내 답:{" "}
+                            {Number.isFinite(selected) ? `${selected + 1}번 (${selectedText})` : "-"}
+                            <br />
+                            정답: {Number.isFinite(answer) ? `${answer + 1}번 (${answerText})` : "-"}
                           </p>
                           {question.explanation ? (
                             <p className="muted">{String(question.explanation)}</p>
@@ -222,6 +291,7 @@ export default function App() {
     questions: [],
     answers: {},
   });
+  const [quizActiveIndex, setQuizActiveIndex] = useState(0);
   const [isQuizPanelHidden, setIsQuizPanelHidden] = useState(false);
   const [mode, setMode] = useState("auto");
   const [inputValue, setInputValue] = useState("");
@@ -241,6 +311,15 @@ export default function App() {
   useEffect(() => {
     listBottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, isSending]);
+
+  useEffect(() => {
+    setQuizActiveIndex((prev) => {
+      if (quizWorkspace.questions.length === 0) {
+        return 0;
+      }
+      return Math.min(prev, quizWorkspace.questions.length - 1);
+    });
+  }, [quizWorkspace.questions.length]);
 
   const lastAssistantMessage = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -277,6 +356,7 @@ export default function App() {
     setSessionId(nextSession);
     setMessages([]);
     setQuizWorkspace({ questions: [], answers: {} });
+    setQuizActiveIndex(0);
     setIsQuizPanelHidden(false);
     setInputValue("");
   };
@@ -310,11 +390,21 @@ export default function App() {
     }));
   };
 
+  const setActiveQuizQuestion = (index) => {
+    setQuizActiveIndex(() => {
+      if (quizWorkspace.questions.length === 0) {
+        return 0;
+      }
+      return Math.min(Math.max(index, 0), quizWorkspace.questions.length - 1);
+    });
+  };
+
   const resetWorkspaceProgress = () => {
     setQuizWorkspace((prev) => ({
       ...prev,
       answers: {},
     }));
+    setQuizActiveIndex(0);
   };
 
   const sendMessage = async (rawText, options = {}) => {
@@ -488,6 +578,8 @@ export default function App() {
         <QuizWorkspace
           questions={quizWorkspace.questions}
           answers={quizWorkspace.answers}
+          activeIndex={quizActiveIndex}
+          onSelectQuestion={setActiveQuizQuestion}
           onAnswer={handleWorkspaceAnswer}
           onReset={resetWorkspaceProgress}
           onGenerateMore={handleGenerateMoreQuiz}

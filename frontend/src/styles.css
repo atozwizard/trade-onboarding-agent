@@ -525,6 +525,10 @@ html {
   cursor: pointer;
 }
 
+.quiz-option:disabled {
+  cursor: default;
+}
+
 .quiz-option:hover:not(:disabled) {
   border-color: #7c9dcb;
   background: #f1f7ff;
@@ -555,6 +559,49 @@ html {
 
 .quiz-result.wrong {
   color: #9d3c2f;
+}
+
+.quiz-explanation {
+  border: 1px solid #d4deee;
+  border-radius: 8px;
+  background: #f8fbff;
+  padding: 8px;
+}
+
+.quiz-explanation strong {
+  font-size: 0.84rem;
+  color: #334155;
+}
+
+.quiz-explanation p {
+  margin: 6px 0 0;
+  font-size: 0.88rem;
+  color: #334155;
+  line-height: 1.5;
+}
+
+.quiz-navigation {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.quiz-navigation button {
+  border: 1px solid #bfd0e7;
+  border-radius: 8px;
+  background: #f8fbff;
+  color: #1e3a8a;
+  font-size: 0.82rem;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.quiz-navigation button:disabled {
+  border-color: #d7e0ef;
+  color: #94a3b8;
+  background: #f8fafc;
+  cursor: not-allowed;
 }
 
 .quiz-result-summary {
