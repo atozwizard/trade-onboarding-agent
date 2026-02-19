@@ -44,7 +44,7 @@ C_RED    = RGBColor(0xC0, 0x39, 0x2B)
 C_PURPLE = RGBColor(0x6C, 0x3D, 0xA8)
 
 FONT = "Noto Sans KR"
-OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "TradeOnboardingAgent_v3_updated.pptx")
+OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "TradeOnboardingAgent_v5.pptx")
 
 
 # -----------------------------------------
@@ -744,20 +744,22 @@ def s16_stack(prs):
 
     # 역할 분담
     roles = [
-        ("이성준", "QuizAgent · EvalTool", C_GREEN),
-        ("차세종", "RiskManagingAgent", C_RED),
-        ("황지은", "EmailAgent", C_ORANGE),
-        ("이영기", "프론트엔드 · RAG", C_BLUE),
+        ("이성준", "Quiz Agent", C_GREEN),
+        ("차세종", "Email Agent", C_ORANGE),
+        ("황지은", "Risk Managing Agent", C_ORANGE),
+        ("이영기", "Risk Managing Agent", C_RED),
+        ("공동", "RAG 데이터 & Orchestrator", C_BLUE),
     ]
     add_rect(slide, 9.8, y0, 3.3, 0.44, C_NAVY)
     add_text(slide, "역할 분담", 9.85, y0 + 0.06, 3.2, 0.34,
              size=13, bold=True, color=C_WHITE, align=PP_ALIGN.CENTER)
+    row_h = 0.78
     for i, (name, role, color) in enumerate(roles):
-        add_rect(slide, 9.8, y0 + 0.44 + i * 1.0, 3.3, 0.95, color)
-        add_text(slide, name, 9.85, y0 + 0.5 + i * 1.0, 3.2, 0.4,
-                 size=14, bold=True, color=C_WHITE, align=PP_ALIGN.CENTER)
-        add_text(slide, role, 9.85, y0 + 0.88 + i * 1.0, 3.2, 0.4,
-                 size=11, color=C_WHITE, align=PP_ALIGN.CENTER)
+        add_rect(slide, 9.8, y0 + 0.44 + i * row_h, 3.3, row_h - 0.04, color)
+        add_text(slide, name, 9.85, y0 + 0.48 + i * row_h, 3.2, 0.32,
+                 size=13, bold=True, color=C_WHITE, align=PP_ALIGN.CENTER)
+        add_text(slide, role, 9.85, y0 + 0.78 + i * row_h, 3.2, 0.32,
+                 size=10, color=C_WHITE, align=PP_ALIGN.CENTER)
 
 
 # -----------------------------------------
