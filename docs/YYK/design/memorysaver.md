@@ -40,6 +40,15 @@
     - `backend/utils/json_utils.py` 생성.
     - `json.loads(text, strict=False)` 옵션을 사용하는 `safe_json_parse` 유틸리티 구현 및 전방위 적용.
 
+### 2.6 응답 중첩(Nesting) 및 문자열화 문제
+- **현상**: `analysis_id`가 null인 중간 상태에서 응답이 `response='response="..." '`와 같이 여러 번 중첩되어 출력됨.
+- **원인**: 
+    - `format_final_output_node`에서 이전 턴의 `RiskManagingAgentResponse` 객체를 `str()`로 변환하여 새로운 응답의 `response` 필드에 담으면서 재귀적으로 중첩 발생.
+    - 체크포인트에서 로드된 `dict` 형태의 응답을 `RiskManagingAgent.run`에서 다시 객체화/문자열화하며 발생.
+- **해결**:
+    - `nodes.py`: `agent_response_from_state`가 이미 구조화된 응답(객체 또는 dict)인 경우, `.response` 내용만 추출하여 사용하도록 로직 개선.
+    - `graph.py`: 결과값이 이미 dict 형태인 경우 중복 래핑하지 않도록 처리.
+
 ## 3. 최종 아키텍처 (Final Design)
 
 - **Persistence**: `risk_checkpoints.db` (SQLite 파일)

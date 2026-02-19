@@ -107,6 +107,7 @@ CONVERSATION_ASSESSMENT_PROMPT = """
 1. 모든 출력은 반드시 사용자와 상호작용하는 대화형(Q&A) 구조로만 진행한다.
 2. **자동 보고서 생성 금지**: 정보가 충분하더라도 사용자의 명시적 요청이나 승인 없이 최종 보고서를 출력하지 않는다.
 3. **중간 추론 공유**: 정보가 어느 정도 모였다면, 지금까지 파악된 리스크의 핵심을 상사처럼 짧게 언급("중간 추론")하고, 보고서 작성을 원하는지 물어본다.
+4. **프로세스 및 기준 문의 대응**: 사용자가 리스크 평가 방식, 영향도 산출 기준, 점수 정의 등을 물어본다면, 시스템 프롬프트에 명시된 기준을 바탕으로 친절하고 전문적인 선배로서 상세히 설명해주시오. 이때는 `status`를 `insufficient`로 유지하며 대화를 이어간다.
 
 <추출 항목>
 -   **계약 금액 (contract_amount)**
@@ -340,7 +341,12 @@ class SimilarityEngine:
             "문제 발생",
             "invoice 오류",
             "HS code 문제",
-            "payment 지연"
+            "payment 지연",
+            "리스크 평가 기준",
+            "점수 산출 방법",
+            "분석 절차 문의",
+            "영향도 계산",
+            "발생 가능성 판단"
         ]
         self.reference_embeddings = []
         self._initialize_embeddings()
@@ -919,8 +925,9 @@ def prepare_risk_state_node(state: RiskManagingGraphState) -> Dict[str, Any]:
         "report_generated": None,
         "conversation_stage": "prepared",
         "error_message": None,
-        "analysis_in_progress": False,
+        "analysis_in_progress": True, # Keep analysis active by default if entered
         "analysis_required": False,
+        "agent_response": None, # Explicitly clear previous response
     }
 
 # Node function for detecting trigger words and similarity
@@ -1046,6 +1053,7 @@ def format_final_output_node(state: RiskManagingGraphState) -> Dict[str, Any]:
     report = state.get("report_generated")
     error_message = state.get("error_message")
     agent_response_from_state = state.get("agent_response")
+    final_metadata = {"status": "insufficient_info", "analysis_id": None}
 
     if error_message:
         final_response_content = f"죄송합니다. 처리 중 오류가 발생했습니다: {error_message}"
@@ -1055,11 +1063,21 @@ def format_final_output_node(state: RiskManagingGraphState) -> Dict[str, Any]:
         final_metadata = {"status": "success", "analysis_id": report.analysis_id}
     elif agent_response_from_state:
         # Use intermediate response (e.g. follow-up questions from conversation assessment)
-        final_response_content = str(agent_response_from_state)
-        final_metadata = {"status": "insufficient_info", "analysis_id": None}
+        if hasattr(agent_response_from_state, "response"):
+            final_response_content = agent_response_from_state.response
+            # Keep existing metadata if present
+            if hasattr(agent_response_from_state, "metadata") and agent_response_from_state.metadata:
+                final_metadata = agent_response_from_state.metadata
+        elif isinstance(agent_response_from_state, dict) and "response" in agent_response_from_state:
+            final_response_content = agent_response_from_state["response"]
+            if "metadata" in agent_response_from_state and agent_response_from_state["metadata"]:
+                final_metadata = agent_response_from_state["metadata"]
+        else:
+            final_response_content = str(agent_response_from_state)
+            final_metadata = {"status": "insufficient_info", "analysis_id": None}
     else:
         # Fallback for when analysis is not complete but no specific error
-        final_response_content = "리스크 분석을 완료하지 못했습니다. 더 많은 정보가 필요하거나, 다시 시도해 주십시오."
+        final_response_content = "상세 분석을 위해 먼저 리스크 상황(계약 금액, 페널티, 지연 일수 등)을 설명해 주시거나, 궁금하신 점(평가 기준 등)을 물어봐 주세요."
         final_metadata = {"status": "incomplete", "analysis_id": None}
 
     agent_response = RiskManagingAgentResponse(
