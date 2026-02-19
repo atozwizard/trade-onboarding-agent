@@ -157,8 +157,8 @@ def _classify_intent_with_llm(user_input: str) -> str:
             "LLM intent classification raw response (truncated): %s",
             str(response)[:400],
         )
-        
-        parsed_response = json.loads(response)
+        from backend.utils.json_utils import safe_json_parse
+        parsed_response = safe_json_parse(response)
         agent_type = parsed_response.get("agent_type", DEFAULT_AGENT_NAME)
         reason = parsed_response.get("reason", "LLM based classification.")
         logger.info("LLM classified intent: %s (reason=%s)", agent_type, reason)
@@ -346,6 +346,9 @@ def call_agent_node(state: OrchestratorGraphState) -> Dict[str, Any]:
         return state_dict
     
     agent_context = dict(context)
+    # Ensure session_id is passed to the agent for state persistence (MemorySaver/SqliteSaver)
+    agent_context["session_id"] = state_dict.get("session_id")
+    
     if selected_agent_name == "quiz":
         agent_context["_agent_specific_state"] = agent_specific_state
 

@@ -48,25 +48,8 @@ def _parse_json(raw: str):
     """LLM 응답에서 JSON 배열을 추출.
     앞뒤 텍스트, ```json ... ``` 코드블록 모두 처리.
     """
-    import re
-    text = raw.strip()
-
-    # 1) 코드블록 내 JSON 추출 시도
-    match = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
-    if match:
-        text = match.group(1).strip()
-
-    # 2) 코드블록 없으면 [ ... ] 또는 { ... } 범위 추출
-    if not text.startswith('[') and not text.startswith('{'):
-        arr_match = re.search(r'(\[[\s\S]*\])', text)
-        if arr_match:
-            text = arr_match.group(1)
-        else:
-            obj_match = re.search(r'(\{[\s\S]*\})', text)
-            if obj_match:
-                text = obj_match.group(1)
-
-    return json.loads(text)
+    from backend.utils.json_utils import safe_json_parse
+    return safe_json_parse(raw)
 
 
 def _format_reference_data(docs: list) -> str:

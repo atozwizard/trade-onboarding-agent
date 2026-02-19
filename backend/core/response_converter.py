@@ -89,39 +89,11 @@ def _normalize_risk_factors(raw_factors: Any) -> Dict[str, Dict[str, Any]]:
 def _parse_json_flexible(text: str) -> Optional[Any]:
     if not isinstance(text, str):
         return None
-
-    stripped = text.strip()
-    if not stripped:
+    from backend.utils.json_utils import safe_json_parse
+    try:
+        return safe_json_parse(text)
+    except:
         return None
-
-    candidates: List[str] = [stripped]
-
-    fenced_blocks = re.findall(r"```(?:json)?\s*([\s\S]*?)```", stripped, flags=re.IGNORECASE)
-    candidates.extend(block.strip() for block in fenced_blocks if block.strip())
-
-    array_start = stripped.find("[")
-    array_end = stripped.rfind("]")
-    if array_start >= 0 and array_end > array_start:
-        candidates.append(stripped[array_start:array_end + 1].strip())
-
-    object_start = stripped.find("{")
-    object_end = stripped.rfind("}")
-    if object_start >= 0 and object_end > object_start:
-        candidates.append(stripped[object_start:object_end + 1].strip())
-
-    seen = set()
-    unique_candidates: List[str] = []
-    for candidate in candidates:
-        if candidate not in seen:
-            seen.add(candidate)
-            unique_candidates.append(candidate)
-
-    for candidate in unique_candidates:
-        try:
-            return json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
-    return None
 
 
 def _format_quiz_chat_message(payload: Any) -> Optional[str]:
