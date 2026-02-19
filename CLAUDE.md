@@ -1003,7 +1003,7 @@ tail -f logs/app.log
 
 | 항목 | 현재 상태 | 프로덕션 교체 필요 |
 |------|----------|-------------------|
-| **세션 관리** | InMemoryConversationStore (Python dict) | ✅ Redis, PostgreSQL 등 |
+| **세션 관리** | ConversationStore (Python dict) | ✅ Redis, PostgreSQL 등 |
 | **인증/권한** | 없음 | ✅ OAuth2, JWT 등 |
 | **멀티 테넌트** | 단일 테넌트 (사용자 격리 없음) | ✅ 테넌트 분리 로직 |
 | **세션 영속성** | 서버 재시작 시 손실 | ✅ 영구 저장소 |

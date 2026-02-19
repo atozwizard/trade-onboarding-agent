@@ -2,6 +2,9 @@
 from typing import List, Dict, Optional, Any
 from typing import Callable, Literal
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from langgraph.checkpoint.memory import MemorySaver
+import sqlite3
 from backend.utils.logger import get_logger
 
 # Internal imports
@@ -13,8 +16,9 @@ from backend.agents.riskmanaging.nodes import (
     assess_conversation_progress_node,
     perform_full_analysis_node,
     format_final_output_node,
-    handle_risk_error_node # For error handling path if integrated directly into graph
+    # handle_risk_error_node # For error handling path if integrated directly into graph
 )
+import uuid
 
 # Define conditional edges decision logic
 logger = get_logger(__name__)
@@ -85,7 +89,11 @@ def create_risk_managing_graph() -> StateGraph:
     return workflow
 
 risk_managing_graph = create_risk_managing_graph()
-compiled_risk_managing_app = risk_managing_graph.compile()
+
+# We will use MemorySaver as a default/fallback for the module-level compiled app
+# but the RiskManagingAgent.run will use AsyncSqliteSaver for persistent storage.
+memory_fallback = MemorySaver()
+compiled_risk_managing_app_default = risk_managing_graph.compile(checkpointer=memory_fallback)
 
 class RiskManagingAgent(BaseAgent):
     """
@@ -102,29 +110,37 @@ class RiskManagingAgent(BaseAgent):
         if context is None:
             context = {}
 
-        # Initialize the state for the risk managing graph
-        initial_state: RiskManagingGraphState = {
+        # Prepare the input state for the risk managing graph
+        # Only include fields that are new or updated. 
+        # Do NOT include fields that should be persisted (like extracted_data) 
+        # unless you want to overwrite them with defaults.
+        # LangGraph will merge this input with the saved state from the checkpoint.
+        input_state: Dict[str, Any] = {
             "current_user_input": user_input,
             "conversation_history": conversation_history,
             "analysis_in_progress": analysis_in_progress,
-            "risk_trigger_detected": False,
-            "risk_similarity_score": 0.0,
-            "analysis_required": False,
-            "analysis_ready": False,
-            "conversation_stage": "initial",
-            "extracted_data": {},
-            "rag_documents": [],
-            "risk_scoring": None,
-            "report_generated": None,
-            "agent_response": "",
-            "error_message": None,
             "user_profile": context.get("user_profile")
         }
 
-        # Invoke the compiled graph
-        # Use asyncio.run() for consistency with other agents
+        # Invoke the compiled graph using AsyncSqliteSaver for persistent storage
         import asyncio
-        final_state = asyncio.run(compiled_risk_managing_app.ainvoke(initial_state))
+        
+        async def _run_graph():
+            try:
+                # Open async connection to sqlite
+                async with AsyncSqliteSaver.from_conn_string("risk_checkpoints.db") as saver:
+                    app = risk_managing_graph.compile(checkpointer=saver)
+                    return await app.ainvoke(input_state, config=config)
+            except Exception as e:
+                logger.warning(f"AsyncSqliteSaver failed: {e}. Falling back to MemorySaver.")
+                return await compiled_risk_managing_app_default.ainvoke(input_state, config=config)
+
+        # Extract session_id for thread_id, or generate a new one if not present
+        session_id = context.get("session_id", str(uuid.uuid4()))
+        config = {"configurable": {"thread_id": session_id}}
+        logger.info(f"RiskManagingAgent running with thread_id: {session_id}")
+        
+        final_state = asyncio.run(_run_graph())
 
         # Extract the final agent_response (RiskManagingAgentResponse object)
         agent_response_obj = final_state.get("agent_response")

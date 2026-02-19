@@ -9,6 +9,7 @@ import json
 import uuid
 import time
 from typing import Dict, Any, List, Optional, cast, TypedDict
+from backend.utils.json_utils import safe_json_parse
 import openai
 from openai import OpenAI
 from langsmith import traceable
@@ -445,14 +446,7 @@ class ConversationManager:
             
             response_text = response.choices[0].message.content.strip()
             
-            # Parse JSON response
-            # Remove markdown code blocks if present
-            if "```json" in response_text:
-                response_text = response_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in response_text:
-                response_text = response_text.split("```")[1].split("```")[0].strip()
-            
-            assessment = json.loads(response_text)
+            assessment = safe_json_parse(response_text)
             
             # Collaborative Mode Logic: 
             # analysis_ready is True ONLY IF (status is sufficient) AND (report_requested is True)
@@ -644,13 +638,7 @@ class RiskEngine:
             
             response_text = response.choices[0].message.content.strip()
             
-            # Parse JSON response
-            if "```json" in response_text:
-                response_text = response_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in response_text:
-                response_text = response_text.split("```")[1].split("```")[0].strip()
-            
-            risk_data = json.loads(response_text)
+            risk_data = safe_json_parse(response_text)
             
             # Convert to RiskScoring object
             from backend.agents.riskmanaging.state import RiskFactor
@@ -833,13 +821,7 @@ class ReportGenerator:
             
             response_text = response.choices[0].message.content.strip()
             
-            # Parse JSON
-            if "```json" in response_text:
-                response_text = response_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in response_text:
-                response_text = response_text.split("```")[1].split("```")[0].strip()
-            
-            gap_data = json.loads(response_text)
+            gap_data = safe_json_parse(response_text)
             
             return ControlGapAnalysis(
                 identified_gaps=gap_data.get("identified_gaps", []),
@@ -885,13 +867,7 @@ class ReportGenerator:
             
             response_text = response.choices[0].message.content.strip()
             
-            # Parse JSON
-            if "```json" in response_text:
-                response_text = response_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in response_text:
-                response_text = response_text.split("```")[1].split("```")[0].strip()
-            
-            strategy_data = json.loads(response_text)
+            strategy_data = safe_json_parse(response_text)
             
             return PreventionStrategy(
                 short_term=strategy_data.get("short_term", []),
