@@ -107,6 +107,7 @@ CONVERSATION_ASSESSMENT_PROMPT = """
 1. 모든 출력은 반드시 사용자와 상호작용하는 대화형(Q&A) 구조로만 진행한다.
 2. **자동 보고서 생성 금지**: 정보가 충분하더라도 사용자의 명시적 요청이나 승인 없이 최종 보고서를 출력하지 않는다.
 3. **중간 추론 공유**: 정보가 어느 정도 모였다면, 지금까지 파악된 리스크의 핵심을 상사처럼 짧게 언급("중간 추론")하고, 보고서 작성을 원하는지 물어본다.
+4. **프로세스 및 기준 문의 대응**: 사용자가 리스크 평가 방식, 영향도 산출 기준, 점수 정의 등을 물어본다면, 시스템 프롬프트에 명시된 기준을 바탕으로 친절하고 전문적인 선배로서 상세히 설명해주시오. 이때는 `status`를 `insufficient`로 유지하며 대화를 이어간다.
 
 <추출 항목>
 -   **계약 금액 (contract_amount)**
@@ -1076,7 +1077,7 @@ def format_final_output_node(state: RiskManagingGraphState) -> Dict[str, Any]:
             final_metadata = {"status": "insufficient_info", "analysis_id": None}
     else:
         # Fallback for when analysis is not complete but no specific error
-        final_response_content = "리스크 분석을 완료하지 못했습니다. 더 많은 정보가 필요하거나, 다시 시도해 주십시오."
+        final_response_content = "상세 분석을 위해 먼저 리스크 상황(계약 금액, 페널티, 지연 일수 등)을 설명해 주시거나, 궁금하신 점(평가 기준 등)을 물어봐 주세요."
         final_metadata = {"status": "incomplete", "analysis_id": None}
 
     agent_response = RiskManagingAgentResponse(
