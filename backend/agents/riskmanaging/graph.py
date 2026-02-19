@@ -2,6 +2,7 @@
 from typing import List, Dict, Optional, Any
 from typing import Callable, Literal
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
 from backend.utils.logger import get_logger
 
 # Internal imports
@@ -13,8 +14,9 @@ from backend.agents.riskmanaging.nodes import (
     assess_conversation_progress_node,
     perform_full_analysis_node,
     format_final_output_node,
-    handle_risk_error_node # For error handling path if integrated directly into graph
+    # handle_risk_error_node # For error handling path if integrated directly into graph
 )
+import uuid
 
 # Define conditional edges decision logic
 logger = get_logger(__name__)
@@ -85,7 +87,8 @@ def create_risk_managing_graph() -> StateGraph:
     return workflow
 
 risk_managing_graph = create_risk_managing_graph()
-compiled_risk_managing_app = risk_managing_graph.compile()
+memory = MemorySaver()
+compiled_risk_managing_app = risk_managing_graph.compile(checkpointer=memory)
 
 class RiskManagingAgent(BaseAgent):
     """
@@ -124,7 +127,12 @@ class RiskManagingAgent(BaseAgent):
         # Invoke the compiled graph
         # Use asyncio.run() for consistency with other agents
         import asyncio
-        final_state = asyncio.run(compiled_risk_managing_app.ainvoke(initial_state))
+        
+        # Extract session_id for thread_id, or generate a new one if not present
+        session_id = context.get("session_id", str(uuid.uuid4()))
+        config = {"configurable": {"thread_id": session_id}}
+        
+        final_state = asyncio.run(compiled_risk_managing_app.ainvoke(initial_state, config=config))
 
         # Extract the final agent_response (RiskManagingAgentResponse object)
         agent_response_obj = final_state.get("agent_response")
