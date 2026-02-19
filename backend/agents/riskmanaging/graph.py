@@ -148,6 +148,9 @@ class RiskManagingAgent(BaseAgent):
         # If it's a Pydantic object, we might need to dump it
         if hasattr(agent_response_obj, "model_dump"):
             response_payload = agent_response_obj.model_dump()
+        elif isinstance(agent_response_obj, dict) and "response" in agent_response_obj:
+            # Already a dict with expected structure, use it
+            response_payload = agent_response_obj
         else:
             # Fallback
             response_payload = {
