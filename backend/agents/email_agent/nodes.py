@@ -176,12 +176,32 @@ def _extract_email_body_from_text(text: str) -> Optional[str]:
 
     lower = stripped.lower()
     looks_like_email = any(
-        marker in lower for marker in ["dear ", "best regards", "kind regards", "sincerely", "subject:"]
+        marker in lower
+        for marker in [
+            "dear ",
+            "best regards",
+            "kind regards",
+            "sincerely",
+            "subject:",
+            "제목:",
+            "수신:",
+            "incoterms:",
+            "결제 조건:",
+            "납기:",
+            "수량:",
+            "단가:",
+        ]
     )
     if not looks_like_email and "\n" not in stripped:
         return None
 
-    lines = [line.rstrip() for line in stripped.splitlines() if line.strip()]
+    if "\n" in stripped:
+        raw_lines = stripped.splitlines()
+    else:
+        # Many users paste templates as a single line separated by multiple spaces.
+        raw_lines = re.split(r"\s{2,}", stripped)
+
+    lines = [line.strip() for line in raw_lines if line.strip()]
     while lines:
         last_line_lower = lines[-1].lower()
         if any(pattern in last_line_lower for pattern in EMAIL_TRAILING_REVIEW_PATTERNS):
@@ -196,13 +216,75 @@ def _extract_email_body_from_text(text: str) -> Optional[str]:
     return candidate if len(candidate) >= 60 else None
 
 
+def _is_assistant_email_draft_candidate(text: str) -> bool:
+    lowered = text.lower()
+    strong_markers = [
+        "subject:",
+        "dear ",
+        "best regards",
+        "kind regards",
+        "sincerely",
+        "제목:",
+        "수신:",
+        "발신:",
+    ]
+    if any(marker in lowered for marker in strong_markers):
+        return True
+
+    has_greeting = ("안녕하세요" in text) or ("dear " in lowered)
+    has_signoff = any(
+        marker in lowered
+        for marker in ["best regards", "kind regards", "sincerely", "감사합니다", "드림", "올림"]
+    )
+    has_trade_fields = any(
+        marker in lowered
+        for marker in [
+            "incoterms",
+            "결제 조건",
+            "납기",
+            "수량",
+            "단가",
+            "payment",
+            "delivery",
+            "quantity",
+        ]
+    )
+    return has_greeting and (has_signoff or has_trade_fields)
+
+
 def _extract_email_content(
     user_input: str,
     conversation_history: List[Dict[str, str]],
+    task_type: str = "draft",
 ) -> Optional[str]:
     current_turn_email = _extract_email_body_from_text(user_input)
     if current_turn_email:
         return current_turn_email
+
+    if task_type == "review":
+        # 1) Prefer user-provided email text for review.
+        for turn in reversed(conversation_history or []):
+            role = str(turn.get("role", "")).strip().lower()
+            if role not in {"user", "human"}:
+                continue
+            content = str(turn.get("content", "")).strip()
+            candidate = _extract_email_body_from_text(content)
+            if candidate:
+                return candidate
+
+        # 2) If user text is unavailable, allow assistant drafts only when they
+        # clearly look like actual email content (avoid generic assistant messages).
+        for turn in reversed(conversation_history or []):
+            role = str(turn.get("role", "")).strip().lower()
+            if role not in {"assistant", "agent", "ai"}:
+                continue
+            content = str(turn.get("content", "")).strip()
+            if not _is_assistant_email_draft_candidate(content):
+                continue
+            candidate = _extract_email_body_from_text(content)
+            if candidate:
+                return candidate
+        return None
 
     for turn in reversed(conversation_history or []):
         content = str(turn.get("content", "")).strip()
@@ -422,7 +504,7 @@ def prepare_llm_messages_node(state: EmailGraphState) -> Dict[str, Any]:
     retrieved_documents = state_dict.get("retrieved_documents") or []
 
     task_type = _detect_email_task_type(user_input, context)
-    extracted_email_content = _extract_email_content(user_input, conversation_history)
+    extracted_email_content = _extract_email_content(user_input, conversation_history, task_type)
     recipient_country = _extract_country(user_input, context)
     output_language = _detect_output_language(user_input, context, conversation_history)
     language_instruction = _build_language_instruction(output_language, task_type)
