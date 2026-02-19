@@ -905,6 +905,63 @@ class ReportGenerator:
         return min(confidence, 1.0)
 
 
+# --- Post-processing Function ---
+
+def format_decision_report(raw_response: str, risk_score: int) -> str:
+    """
+    Wraps the output into a structured decision report.
+    """
+    decision = "APPROVED"
+    if risk_score >= 8:
+        decision = "BLOCKED"
+    elif 4 <= risk_score <= 7:
+        decision = "WARNING"
+    
+    # Try to parse the raw_response if it's JSON
+    try:
+        data = json.loads(raw_response)
+        summary = data.get("input_summary", "상황 요약 없음")
+        # Extract risk description from overall_assessment in risk_scoring
+        risk_scoring = data.get("risk_scoring", {})
+        risk_desc = risk_scoring.get("overall_assessment", "리스크 설명 없음")
+        # Extract loss from loss_simulation
+        loss_sim = data.get("loss_simulation", {})
+        loss_desc = loss_sim.get("qualitative", "손실 시뮬레이션 없음")
+        # Extract actions from prevention_strategy
+        prev_strat = data.get("prevention_strategy", {})
+        actions = ", ".join(prev_strat.get("short_term", [])) or "즉시 조치 사항 없음"
+        # Extract evidence from evidence_sources
+        evidence = ", ".join(data.get("evidence_sources", [])) or "증거 자료 없음"
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        # Fallback for non-JSON responses (gathering info stage)
+        summary = "정보 수집 중"
+        risk_desc = "추가 정보 확인 필요"
+        loss_desc = "정보 부족으로 산출 불가"
+        actions = "요청된 정보를 제공하십시오"
+        evidence = "대화 맥락"
+        # If it's a conversation message, the message itself is the summary/explanation
+        if isinstance(raw_response, str) and raw_response.strip():
+            summary = raw_response.split("\n")[0][:100] + "..."
+    
+    report = f"""[DECISION]
+{decision}
+
+[SUMMARY]
+{summary}
+
+[RISK]
+{risk_desc}
+
+[LOSS]
+{loss_desc}
+
+[ACTION]
+{actions}
+
+[EVIDENCE]
+{evidence}"""
+    return report
+
 # --- Node functions (to be defined using the above classes) ---
 
 # Node function for preparing the initial state
@@ -1055,6 +1112,15 @@ def format_final_output_node(state: RiskManagingGraphState) -> Dict[str, Any]:
     agent_response_from_state = state.get("agent_response")
     final_metadata = {"status": "insufficient_info", "analysis_id": None}
 
+    # Calculate max risk score for decision report
+    max_risk_score = 0
+    risk_scoring = state.get("risk_scoring")
+    if risk_scoring and risk_scoring.risk_factors:
+        max_risk_score = max(f.risk_score for f in risk_scoring.risk_factors)
+    elif state.get("analysis_in_progress"):
+        # If uncertainty exists during info gathering, set a moderate score
+        max_risk_score = 5 
+
     if error_message:
         final_response_content = f"죄송합니다. 처리 중 오류가 발생했습니다: {error_message}"
         final_metadata = {"status": "error", "analysis_id": None}
@@ -1079,6 +1145,9 @@ def format_final_output_node(state: RiskManagingGraphState) -> Dict[str, Any]:
         # Fallback for when analysis is not complete but no specific error
         final_response_content = "상세 분석을 위해 먼저 리스크 상황(계약 금액, 페널티, 지연 일수 등)을 설명해 주시거나, 궁금하신 점(평가 기준 등)을 물어봐 주세요."
         final_metadata = {"status": "incomplete", "analysis_id": None}
+
+    # Apply the decision report wrapping
+    final_response_content = format_decision_report(final_response_content, max_risk_score)
 
     agent_response = RiskManagingAgentResponse(
         response=final_response_content,
