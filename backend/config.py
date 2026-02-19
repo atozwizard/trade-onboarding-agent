@@ -37,7 +37,12 @@ class Settings(BaseSettings):
     debug: bool = True
 
     # CORS
-    cors_origins: list = ["http://localhost:8501", "http://localhost:3000"]
+    cors_origins: list = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
 
     # Vector Database
     vector_db_dir: str = "backend/vectorstore"

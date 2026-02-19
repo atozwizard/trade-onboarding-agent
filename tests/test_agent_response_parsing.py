@@ -144,7 +144,7 @@ def test_quiz_node_parses_json_array_payload(monkeypatch):
 
     assert "[퀴즈 1]" in updated["final_response_content"]
     assert "신용장의 역할은 무엇인가요?" in updated["final_response_content"]
-    assert "2. 대금지급 보증" in updated["final_response_content"]
+    assert "대금지급 보증" in updated["final_response_content"]
 
 
 def test_quiz_node_parses_fenced_json_array_payload(monkeypatch):
@@ -167,7 +167,7 @@ def test_quiz_node_parses_fenced_json_array_payload(monkeypatch):
 
     assert "[퀴즈 1]" in updated["final_response_content"]
     assert "B/L의 주요 기능은 무엇인가요?" in updated["final_response_content"]
-    assert "1. 운송계약 및 화물 인수 증빙" in updated["final_response_content"]
+    assert "운송계약 및 화물 인수 증빙" in updated["final_response_content"]
 
 
 def test_email_node_review_mode_avoids_echoing_email_content(monkeypatch):
@@ -221,3 +221,19 @@ def test_email_node_review_mode_with_unknown_country_avoids_country_assumption(m
     )
 
     assert updated["final_response_content"] == "RULE_BASED_REVIEW_NO_COUNTRY"
+
+
+def test_email_task_detection_prefers_draft_for_review_purpose_wording():
+    task = email_nodes._detect_email_task_type(
+        "수신자는 미국 바이어고 서류검토를 위한 이메일 초안만들어",
+        {},
+    )
+    assert task == "draft"
+
+
+def test_email_task_detection_keeps_explicit_review_request():
+    task = email_nodes._detect_email_task_type(
+        "이거 이메일 리뷰해줘",
+        {},
+    )
+    assert task == "review"

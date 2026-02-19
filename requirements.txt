@@ -16,9 +16,6 @@ sentence-transformers>=2.3.0
 openai>=1.0.0
 langsmith>=0.1.0
 
-# Frontend
-streamlit>=1.40.0
-
 # Utilities
 requests>=2.31.0
 httpx>=0.26.0

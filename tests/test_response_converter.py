@@ -99,6 +99,8 @@ def test_normalize_response_formats_quiz_json_array_string():
     assert "[퀴즈 1]" in result["message"]
     assert "FOB는 무엇의 약자인가요?" in result["message"]
     assert "1. Free On Board" in result["message"]
+    assert len(result["meta"]["quiz_questions"]) == 1
+    assert result["meta"]["quiz_questions"][0]["question"] == "FOB는 무엇의 약자인가요?"
 
 
 def test_normalize_response_formats_quiz_fenced_json_array_string():
@@ -116,3 +118,34 @@ def test_normalize_response_formats_quiz_fenced_json_array_string():
     assert result["type"] == "chat"
     assert "[퀴즈 1]" in result["message"]
     assert "B/L의 기능은 무엇인가요?" in result["message"]
+
+
+def test_normalize_response_extracts_quiz_questions_from_agent_metadata():
+    raw = {
+        "response": "[퀴즈 1]\nFOB는 무엇의 약자인가요?\n1. Free On Board\n2. Freight On Bill",
+        "agent_type": "quiz",
+        "metadata": {
+            "llm_output_details": {
+                "questions": [
+                    {
+                        "question": "FOB는 무엇의 약자인가요?",
+                        "choices": ["Free On Board", "Freight On Bill", "Final Order Base", "Forwarder On Booking"],
+                        "answer": 0,
+                        "explanation": "FOB는 Free On Board입니다.",
+                    },
+                    {
+                        "question": "CIF에서 운임 부담 주체는 누구인가요?",
+                        "choices": ["매수인", "매도인", "보험사", "은행"],
+                        "answer": 1,
+                        "explanation": "CIF는 매도인이 운임과 보험료를 부담합니다.",
+                    },
+                ]
+            }
+        },
+    }
+
+    result = normalize_response(raw)
+
+    assert result["type"] == "chat"
+    assert "[퀴즈 1]" in result["message"]
+    assert len(result["meta"]["quiz_questions"]) == 2

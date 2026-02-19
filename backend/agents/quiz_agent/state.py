@@ -28,6 +28,7 @@ class QuizGraphState(TypedDict):
     llm_output_details: Optional[Dict[str, Any]]
     model_used: Optional[str]
     quiz_generation_difficulty: Optional[str]
+    quiz_question_count: Optional[int]
     final_metadata: Optional[Dict[str, Any]] # The metadata to be returned
 
     # Output for Orchestrator

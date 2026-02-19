@@ -1,5 +1,0 @@
-# STEP 완료 보고: STEP 1 — 전체 워크플로 분석 및 시각화
-
-**STEP 1이 성공적으로 완료되었습니다.** `docs/WHOLE_WORKFLOW.md` 파일이 생성되었습니다.
-
-이제 다음 단계인 **STEP 2 — riskmanaging_agent 검증 및 시각화**를 진행합니다.
