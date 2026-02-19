@@ -96,10 +96,32 @@ def _detect_email_task_type(user_input: str, context: Dict[str, Any]) -> str:
         return explicit_task
 
     normalized = user_input.lower()
-    if _contains_any(normalized, EMAIL_REVIEW_KEYWORDS):
-        return "review"
-    if _contains_any(normalized, EMAIL_DRAFT_KEYWORDS):
+    has_review_keyword = _contains_any(normalized, EMAIL_REVIEW_KEYWORDS)
+    has_draft_keyword = _contains_any(normalized, EMAIL_DRAFT_KEYWORDS)
+
+    # If both are present (e.g., "검토를 위한 이메일 초안 만들어줘"),
+    # treat it as draft by default unless it is an explicit review request.
+    if has_draft_keyword and has_review_keyword:
+        explicit_review_patterns = [
+            "리뷰해줘",
+            "검토해줘",
+            "리뷰 부탁",
+            "검토 부탁",
+            "이메일 리뷰",
+            "이거 리뷰",
+            "첨삭해",
+            "교정해",
+            "review please",
+            "please review",
+        ]
+        if any(pattern in normalized for pattern in explicit_review_patterns):
+            return "review"
         return "draft"
+
+    if has_draft_keyword:
+        return "draft"
+    if has_review_keyword:
+        return "review"
     return "draft"
 
 

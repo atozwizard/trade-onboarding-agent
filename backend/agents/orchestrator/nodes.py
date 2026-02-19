@@ -189,7 +189,7 @@ def detect_intent_and_route_node(state: OrchestratorGraphState) -> Dict[str, Any
         state_dict["selected_agent_name"] = "riskmanaging"
         return state_dict
 
-    quiz_keywords = ["퀴즈", "문제", "학습", "테스트", "인코텀즈", "용어"]
+    quiz_keywords = ["퀴즈", "학습"]
     if any(keyword in user_input for keyword in quiz_keywords):
         logger.debug("Keyword routing to quiz")
         state_dict["selected_agent_name"] = "quiz"
@@ -256,6 +256,15 @@ def detect_intent_and_route_node(state: OrchestratorGraphState) -> Dict[str, Any
                 "난이도",
                 "쉽게",
                 "어렵게",
+                "더 문제",
+                "문제 더",
+                "퀴즈 더",
+                "더 내줘",
+                "더줘",
+                "더 달라고",
+                "더 만들어",
+                "추가 문제",
+                "추가 퀴즈",
             ]
 
             if (

@@ -126,6 +126,27 @@ def _format_quiz_chat_message(payload: Any) -> Optional[str]:
             lines.append(f"{idx}. {choice}")
     return "\n".join(line for line in lines if line)
 
+
+def _extract_quiz_questions(payload: Any) -> List[Dict[str, Any]]:
+    questions: List[Dict[str, Any]] = []
+    if isinstance(payload, list):
+        questions = [item for item in payload if isinstance(item, dict) and item.get("question")]
+    elif isinstance(payload, dict):
+        if isinstance(payload.get("questions"), list):
+            questions = [
+                item
+                for item in payload.get("questions", [])
+                if isinstance(item, dict) and item.get("question")
+            ]
+        elif isinstance(payload.get("answer"), list):
+            questions = [
+                item
+                for item in payload.get("answer", [])
+                if isinstance(item, dict) and item.get("question")
+            ]
+    return questions
+
+
 def normalize_response(raw: Any) -> Dict[str, Any]:
     """
     모든 agent 응답을 통일된 ChatResponse dict로 변환
@@ -148,8 +169,17 @@ def normalize_response(raw: Any) -> Dict[str, Any]:
     # Identify if it's a report or a simple chat message
     extracted_report_dict = None
     chat_message_content = str(raw) # Default to raw as string
+    chat_meta: Dict[str, Any] = {}
 
     if isinstance(raw, dict):
+        metadata = raw.get("metadata")
+        if isinstance(metadata, dict):
+            llm_output_details = metadata.get("llm_output_details")
+            if isinstance(llm_output_details, dict):
+                questions = _extract_quiz_questions(llm_output_details)
+                if questions:
+                    chat_meta["quiz_questions"] = questions
+
         if "type" in raw: # Already normalized ChatResponse
             return raw
         
@@ -167,12 +197,18 @@ def normalize_response(raw: Any) -> Dict[str, Any]:
                     if isinstance(parsed_str, dict) and "analysis_id" in parsed_str:
                         extracted_report_dict = parsed_str
                     elif parsed_str is not None:
+                        parsed_questions = _extract_quiz_questions(parsed_str)
+                        if parsed_questions:
+                            chat_meta["quiz_questions"] = parsed_questions
                         quiz_message = _format_quiz_chat_message(parsed_str)
                         if quiz_message:
                             chat_message_content = quiz_message
                 except json.JSONDecodeError:
                     pass
             elif isinstance(raw.get("response"), list):
+                parsed_questions = _extract_quiz_questions(raw.get("response"))
+                if parsed_questions:
+                    chat_meta["quiz_questions"] = parsed_questions
                 quiz_message = _format_quiz_chat_message(raw.get("response"))
                 if quiz_message:
                     chat_message_content = quiz_message
@@ -184,6 +220,9 @@ def normalize_response(raw: Any) -> Dict[str, Any]:
                 if isinstance(parsed_str, dict) and "analysis_id" in parsed_str:
                     extracted_report_dict = parsed_str
                 elif parsed_str is not None:
+                    parsed_questions = _extract_quiz_questions(parsed_str)
+                    if parsed_questions:
+                        chat_meta["quiz_questions"] = parsed_questions
                     quiz_message = _format_quiz_chat_message(parsed_str)
                     if quiz_message:
                         chat_message_content = quiz_message
@@ -199,6 +238,9 @@ def normalize_response(raw: Any) -> Dict[str, Any]:
             if isinstance(parsed_str, dict) and "analysis_id" in parsed_str:
                 extracted_report_dict = parsed_str
             elif parsed_str is not None:
+                parsed_questions = _extract_quiz_questions(parsed_str)
+                if parsed_questions:
+                    chat_meta["quiz_questions"] = parsed_questions
                 quiz_message = _format_quiz_chat_message(parsed_str)
                 if quiz_message:
                     chat_message_content = quiz_message
@@ -310,7 +352,7 @@ def normalize_response(raw: Any) -> Dict[str, Any]:
             "type": "report",
             "message": default_report["response_summary"],
             "report": default_report,
-            "meta": {}
+            "meta": chat_meta
         }
     else:
         # It's a chat message
@@ -318,5 +360,5 @@ def normalize_response(raw: Any) -> Dict[str, Any]:
             "type": "chat",
             "message": chat_message_content,
             "report": None,
-            "meta": {}
+            "meta": chat_meta
         }

@@ -17,9 +17,6 @@ openai>=1.0.0
 langsmith>=0.1.0
 langgraph-checkpoint-sqlite>=3.0.3
 
-# Frontend
-streamlit>=1.40.0
-
 # Utilities
 requests>=2.31.0
 httpx>=0.26.0
