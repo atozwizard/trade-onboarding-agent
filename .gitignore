@@ -87,6 +87,7 @@ dataset/embeddings/
 
 # Local assistant workspace
 .claude/
+!.claude/presentation/
 
 # Temporary files
 *.tmp
