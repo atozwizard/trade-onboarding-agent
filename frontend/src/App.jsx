@@ -99,69 +99,71 @@ function QuizWorkspace({
           : `진행: ${solvedCount}/${questions.length} | 정답: ${correctCount}`}
       </p>
 
-      {questions.length === 0 ? (
-        <div className="quiz-empty">채팅에서 "무역실무 퀴즈내줘"를 입력해 시작하세요.</div>
-      ) : (
-        <>
-          {!isCompleted && activeQuestion ? (
-            <article className="quiz-workspace-card current">
-              <strong>
-                [문제 {currentIndex + 1}/{totalCount}] {String(activeQuestion.question)}
-              </strong>
-              <p className="muted">선택하면 다음 문제로 자동 이동합니다.</p>
-              <ul>
-                {(Array.isArray(activeQuestion.choices) ? activeQuestion.choices : []).map(
-                  (choice, choiceIdx) => (
-                    <li key={`${activeQuestion.id}-${choiceIdx}`}>
-                      <button
-                        type="button"
-                        className="quiz-option"
-                        onClick={() => onAnswer(activeQuestion, choiceIdx)}
-                      >
-                        {choiceIdx + 1}. {String(choice)}
-                      </button>
-                    </li>
-                  )
-                )}
-              </ul>
-            </article>
-          ) : null}
-
-          {isCompleted ? (
-            <section className="quiz-result-summary">
-              <h4>채점 결과</h4>
-              <p>
-                총 {totalCount}문제 중 {correctCount}문제 정답 ({scorePercent}%)
-              </p>
-              {wrongQuestions.length === 0 ? (
-                <p className="quiz-result correct">모든 문제를 맞췄습니다.</p>
-              ) : (
-                <ul className="quiz-review-list">
-                  {wrongQuestions.map((question, index) => {
-                    const answerState = answers[question.id];
-                    const selected = Number(answerState?.selected);
-                    const answer = Number(question.answer);
-                    return (
-                      <li key={`wrong-${question.id}`}>
-                        <strong>
-                          오답 {index + 1}. {String(question.question)}
-                        </strong>
-                        <p>
-                          내 답: {Number.isFinite(selected) ? selected + 1 : "-"}번 / 정답:{" "}
-                          {Number.isFinite(answer) ? answer + 1 : "-"}번
-                        </p>
-                        {question.explanation ? (
-                          <p className="muted">{String(question.explanation)}</p>
-                        ) : null}
+      <div className="quiz-panel-body">
+        {questions.length === 0 ? (
+          <div className="quiz-empty">채팅에서 "무역실무 퀴즈내줘"를 입력해 시작하세요.</div>
+        ) : (
+          <>
+            {!isCompleted && activeQuestion ? (
+              <article className="quiz-workspace-card current">
+                <strong>
+                  [문제 {currentIndex + 1}/{totalCount}] {String(activeQuestion.question)}
+                </strong>
+                <p className="muted">선택하면 다음 문제로 자동 이동합니다.</p>
+                <ul>
+                  {(Array.isArray(activeQuestion.choices) ? activeQuestion.choices : []).map(
+                    (choice, choiceIdx) => (
+                      <li key={`${activeQuestion.id}-${choiceIdx}`}>
+                        <button
+                          type="button"
+                          className="quiz-option"
+                          onClick={() => onAnswer(activeQuestion, choiceIdx)}
+                        >
+                          {choiceIdx + 1}. {String(choice)}
+                        </button>
                       </li>
-                    );
-                  })}
+                    )
+                  )}
                 </ul>
-              )}
-            </section>
-          ) : null}
-        </>
-      )}
+              </article>
+            ) : null}
+
+            {isCompleted ? (
+              <section className="quiz-result-summary">
+                <h4>채점 결과</h4>
+                <p>
+                  총 {totalCount}문제 중 {correctCount}문제 정답 ({scorePercent}%)
+                </p>
+                {wrongQuestions.length === 0 ? (
+                  <p className="quiz-result correct">모든 문제를 맞췄습니다.</p>
+                ) : (
+                  <ul className="quiz-review-list">
+                    {wrongQuestions.map((question, index) => {
+                      const answerState = answers[question.id];
+                      const selected = Number(answerState?.selected);
+                      const answer = Number(question.answer);
+                      return (
+                        <li key={`wrong-${question.id}`}>
+                          <strong>
+                            오답 {index + 1}. {String(question.question)}
+                          </strong>
+                          <p>
+                            내 답: {Number.isFinite(selected) ? selected + 1 : "-"}번 / 정답:{" "}
+                            {Number.isFinite(answer) ? answer + 1 : "-"}번
+                          </p>
+                          {question.explanation ? (
+                            <p className="muted">{String(question.explanation)}</p>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
+            ) : null}
+          </>
+        )}
+      </div>
     </aside>
   );
 }
