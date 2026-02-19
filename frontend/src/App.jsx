@@ -51,6 +51,7 @@ function QuizWorkspace({
   onAnswer,
   onReset,
   onGenerateMore,
+  onClose,
   isSending,
 }) {
   const solvedCount = Object.keys(answers).length;
@@ -80,16 +81,21 @@ function QuizWorkspace({
     <aside className="quiz-panel">
       <header className="quiz-panel-head">
         <h3>퀴즈 풀이</h3>
-        <div className="quiz-panel-actions">
-          <button
-            type="button"
-            onClick={onGenerateMore}
-            disabled={isSending}
-          >
-            추가 문제 생성
-          </button>
-          <button type="button" onClick={onReset} disabled={questions.length === 0 || isSending}>
-            초기화
+        <div className="quiz-panel-head-right">
+          <div className="quiz-panel-actions">
+            <button
+              type="button"
+              onClick={onGenerateMore}
+              disabled={isSending}
+            >
+              추가 문제 생성
+            </button>
+            <button type="button" onClick={onReset} disabled={questions.length === 0 || isSending}>
+              초기화
+            </button>
+          </div>
+          <button type="button" className="quiz-panel-close" onClick={onClose}>
+            닫기
           </button>
         </div>
       </header>
@@ -216,6 +222,7 @@ export default function App() {
     questions: [],
     answers: {},
   });
+  const [isQuizPanelHidden, setIsQuizPanelHidden] = useState(false);
   const [mode, setMode] = useState("auto");
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -243,7 +250,8 @@ export default function App() {
     }
     return null;
   }, [messages]);
-  const isQuizPanelOpen = quizWorkspace.questions.length > 0;
+  const hasQuizQuestions = quizWorkspace.questions.length > 0;
+  const isQuizPanelOpen = hasQuizQuestions && !isQuizPanelHidden;
 
   const appendUserMessage = (text) => {
     const userMessage = {
@@ -269,6 +277,7 @@ export default function App() {
     setSessionId(nextSession);
     setMessages([]);
     setQuizWorkspace({ questions: [], answers: {} });
+    setIsQuizPanelHidden(false);
     setInputValue("");
   };
 
@@ -276,6 +285,7 @@ export default function App() {
     if (!Array.isArray(questions) || questions.length === 0) {
       return;
     }
+    setIsQuizPanelHidden(false);
     setQuizWorkspace((prev) => ({
       ...prev,
       questions: mergeQuizQuestions(prev.questions, questions),
@@ -380,6 +390,14 @@ export default function App() {
     sendMessage("추가 문제 만들어줘", { forceQuizMode: true });
   };
 
+  const closeQuizPanel = () => {
+    setIsQuizPanelHidden(true);
+  };
+
+  const reopenQuizPanel = () => {
+    setIsQuizPanelHidden(false);
+  };
+
   return (
     <div className={isQuizPanelOpen ? "page page-with-quiz" : "page"}>
       <aside className="sidebar">
@@ -414,7 +432,14 @@ export default function App() {
 
       <main className="chat-panel">
         <header className="chat-header">
-          <h2>채팅</h2>
+          <div className="chat-header-top">
+            <h2>채팅</h2>
+            {hasQuizQuestions && !isQuizPanelOpen ? (
+              <button type="button" className="quiz-panel-toggle" onClick={reopenQuizPanel}>
+                퀴즈 창 열기
+              </button>
+            ) : null}
+          </div>
           <p className="muted">
             퀴즈/이메일/리스크 응답을 단일 UI에서 렌더링합니다.
           </p>
@@ -466,6 +491,7 @@ export default function App() {
           onAnswer={handleWorkspaceAnswer}
           onReset={resetWorkspaceProgress}
           onGenerateMore={handleGenerateMoreQuiz}
+          onClose={closeQuizPanel}
           isSending={isSending}
         />
       ) : null}

@@ -119,8 +119,29 @@ html {
   backdrop-filter: blur(4px);
 }
 
+.chat-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .chat-header h2 {
   margin: 0;
+}
+
+.quiz-panel-toggle {
+  border: 1px solid #9ab5db;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 0.82rem;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.quiz-panel-toggle:hover {
+  background: #dbeafe;
 }
 
 .message-list {
@@ -428,6 +449,12 @@ html {
   gap: 6px;
 }
 
+.quiz-panel-head-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .quiz-panel-head button {
   border: none;
   border-radius: 8px;
@@ -441,6 +468,15 @@ html {
 .quiz-panel-head button:disabled {
   background: #9db3d9;
   cursor: not-allowed;
+}
+
+.quiz-panel-head .quiz-panel-close {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.quiz-panel-head .quiz-panel-close:hover {
+  background: #cbd5e1;
 }
 
 .quiz-empty {
