@@ -3,10 +3,11 @@ from __future__ import annotations
 import os
 import json
 from typing import Any, Dict, List, Optional, Tuple
-from openai import OpenAI
+from openai import AsyncOpenAI
+from backend.agents.base import BaseAgent
 from backend.config import get_settings
 
-class DefaultChatAgent:
+class DefaultChatAgent(BaseAgent):
     """
     Enhanced DefaultChatAgent using LLM (Solar Pro) for natural conversations
     and system-specific knowledge retrieval.
@@ -18,7 +19,7 @@ class DefaultChatAgent:
         self.settings = get_settings()
         self.client = None
         if self.settings.upstage_api_key:
-            self.client = OpenAI(
+            self.client = AsyncOpenAI(
                 api_key=self.settings.upstage_api_key,
                 base_url="https://api.upstage.ai/v1/solar"
             )
@@ -41,7 +42,7 @@ class DefaultChatAgent:
             print(f"Error loading default_chat_prompt: {e}")
             return "당신은 무역 업무 지원 플랫폼의 스마트지식 가이드입니다."
 
-    def run(
+    async def run(
         self,
         user_input: str,
         conversation_history: List[Dict[str, str]],
@@ -66,7 +67,7 @@ class DefaultChatAgent:
             if not self.client:
                 raise ValueError("LLM client not initialized (check API key)")
 
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model="solar-pro",
                 messages=messages,
                 temperature=0.7
@@ -98,5 +99,5 @@ if __name__ == "__main__":
     agent = DefaultChatAgent()
     test_q = "안녕! 리스크 점수가 15점이면 위험한 거야?"
     print(f"Query: {test_q}")
-    result = agent.run(test_q, [])
+    result = asyncio.run(agent.run(test_q, []))
     print(f"Response: {result['response']['response']}")

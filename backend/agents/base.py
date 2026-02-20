@@ -50,7 +50,7 @@ class BaseAgent(ABC):
     """
 
     @abstractmethod
-    def run(
+    async def run(
         self,
         user_input: str,
         conversation_history: List[Dict[str, str]],
