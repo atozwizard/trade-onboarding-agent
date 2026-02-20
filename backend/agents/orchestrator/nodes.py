@@ -5,6 +5,7 @@ import sys
 import json
 import time
 import re
+import inspect
 from typing import Dict, Any, List, Optional, Type, cast
 
 import openai
@@ -329,7 +330,7 @@ def detect_intent_and_route_node(state: OrchestratorGraphState) -> Dict[str, Any
         return state_dict
 
 
-def call_agent_node(state: OrchestratorGraphState) -> Dict[str, Any]:
+async def call_agent_node(state: OrchestratorGraphState) -> Dict[str, Any]:
     state_dict = cast(Dict[str, Any], state)
 
     selected_agent_name = state_dict["selected_agent_name"]
@@ -361,11 +362,16 @@ def call_agent_node(state: OrchestratorGraphState) -> Dict[str, Any]:
     if selected_agent_name == "quiz":
         agent_context["_agent_specific_state"] = agent_specific_state
 
-    agent_output = agent_instance.run(
+    maybe_agent_output = agent_instance.run(
         user_input=user_input,
         conversation_history=conversation_history,
         analysis_in_progress=agent_specific_state.get("analysis_in_progress", False),
         context=agent_context
+    )
+    agent_output = (
+        await maybe_agent_output
+        if inspect.isawaitable(maybe_agent_output)
+        else maybe_agent_output
     )
 
     state_dict["orchestrator_response"] = agent_output.get("response", {"response": "에이전트 응답 오류", "agent_type": "orchestrator", "metadata": {}})

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import json
 from typing import Any, Dict, List, Optional, Tuple
+import asyncio
 from openai import OpenAI
 from backend.config import get_settings
 
@@ -41,7 +42,7 @@ class DefaultChatAgent:
             print(f"Error loading default_chat_prompt: {e}")
             return "당신은 무역 업무 지원 플랫폼의 스마트지식 가이드입니다."
 
-    def run(
+    async def run(
         self,
         user_input: str,
         conversation_history: List[Dict[str, str]],
@@ -98,5 +99,5 @@ if __name__ == "__main__":
     agent = DefaultChatAgent()
     test_q = "안녕! 리스크 점수가 15점이면 위험한 거야?"
     print(f"Query: {test_q}")
-    result = agent.run(test_q, [])
+    result = asyncio.run(agent.run(test_q, []))
     print(f"Response: {result['response']['response']}")
