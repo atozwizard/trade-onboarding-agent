@@ -29,7 +29,7 @@ class EmailAgent(BaseAgent):
         # and initialized globally by EmailAgentComponents.
         pass
 
-    def run(self, 
+    async def run(self, 
             user_input: str, 
             conversation_history: List[Dict[str, str]], # Retained for signature consistency
             analysis_in_progress: bool, # Retained for signature consistency
@@ -83,7 +83,7 @@ class EmailAgent(BaseAgent):
         # For now, let's keep them in initial_state to show the data flow if they were needed.
 
         # Invoke the compiled graph
-        final_state = asyncio.run(compiled_email_agent_app.ainvoke(initial_state))
+        final_state = await compiled_email_agent_app.ainvoke(initial_state)
 
         # Extract the final output for the orchestrator
         final_output = final_state.get("agent_output_for_orchestrator")

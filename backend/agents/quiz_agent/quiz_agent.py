@@ -83,7 +83,7 @@ class QuizAgent(BaseAgent):
         # and initialized globally by QuizAgentComponents.
         pass
 
-    def run(self, 
+    async def run(self, 
             user_input: str, 
             conversation_history: List[Dict[str, str]], # Retained for signature consistency
             analysis_in_progress: bool, # Retained for signature consistency
@@ -158,7 +158,7 @@ class QuizAgent(BaseAgent):
         }
 
         # Invoke the compiled graph
-        final_state = asyncio.run(compiled_quiz_agent_app.ainvoke(initial_state))
+        final_state = await compiled_quiz_agent_app.ainvoke(initial_state)
 
         # Extract the final output for the orchestrator
         final_output = final_state.get("agent_output_for_orchestrator")

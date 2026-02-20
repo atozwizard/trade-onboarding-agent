@@ -102,7 +102,7 @@ class RiskManagingAgent(BaseAgent):
     """
     agent_type: str = "riskmanaging"
 
-    def run(self, 
+    async def run(self, 
             user_input: str, 
             conversation_history: List[Dict[str, str]], 
             analysis_in_progress: bool, 
@@ -123,7 +123,6 @@ class RiskManagingAgent(BaseAgent):
         }
 
         # Invoke the compiled graph using AsyncSqliteSaver for persistent storage
-        import asyncio
         
         async def _run_graph():
             try:
@@ -140,7 +139,7 @@ class RiskManagingAgent(BaseAgent):
         config = {"configurable": {"thread_id": session_id}}
         logger.info(f"RiskManagingAgent running with thread_id: {session_id}")
         
-        final_state = asyncio.run(_run_graph())
+        final_state = await _run_graph()
 
         # Extract the final agent_response (RiskManagingAgentResponse object)
         agent_response_obj = final_state.get("agent_response")
